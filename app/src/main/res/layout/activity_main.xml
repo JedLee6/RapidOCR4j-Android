@@ -117,6 +117,7 @@
                 android:layout_marginBottom="16dp"
                 android:textSize="16sp"
                 android:lineSpacingExtra="4dp"
+                android:textIsSelectable="true"
                 tools:text="OCR识别结果将显示在这里" />
 
         </LinearLayout>
