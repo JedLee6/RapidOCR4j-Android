@@ -13,7 +13,11 @@ import android.util.AttributeSet;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewConfiguration;
+import android.widget.FrameLayout;
+import android.widget.ImageView;
+import android.widget.RelativeLayout;
 import android.widget.ScrollView;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import java.util.ArrayList;
@@ -21,22 +25,14 @@ import java.util.List;
 
 import io.github.hzkitty.entity.RecResult;
 
-public class OcrImageView extends androidx.appcompat.widget.AppCompatImageView {
+public class OcrImageView extends RelativeLayout {
+    private ImageView mImageView;
+    private FrameLayout mTextContainer;
     private Bitmap mBitmap;
     private List<RecResult> mOcrResults;
-    private List<Rect> mTextRects;
-    private List<String> mTextList;
+    private List<TextView> mTextViews;
     
-    private Paint mRectPaint;
-    private Paint mTextPaint;
-    private Paint mSelectedPaint;
-    
-    private Rect mSelectedRect;
-    private int mSelectedIndex;
-    
-    private float mDownX, mDownY;
-    private boolean mIsSelecting;
-    private int mTouchSlop;
+    private Paint mDebugPaint; // 仅用于调试，显示文本框边界
     
     public OcrImageView(Context context) {
         super(context);
@@ -54,44 +50,39 @@ public class OcrImageView extends androidx.appcompat.widget.AppCompatImageView {
     }
     
     private void init() {
-        // 初始化画笔
-        mRectPaint = new Paint();
-        mRectPaint.setColor(Color.argb(128, 0, 0, 0)); // 设置半透明黑色背景
-        mRectPaint.setStyle(Paint.Style.FILL); // 填充样式，替换原来的描边
+        // 初始化子视图
+        mImageView = new ImageView(getContext());
+        mTextContainer = new FrameLayout(getContext());
         
-        mTextPaint = new Paint();
-        mTextPaint.setColor(Color.WHITE);
-        mTextPaint.setTextSize(16f);
-        mTextPaint.setShadowLayer(2f, 1f, 1f, Color.BLACK); // 增强文字阴影效果
-        mTextPaint.setAntiAlias(true); // 开启抗锯齿，使文字更清晰
+        // 设置ImageView参数
+        mImageView.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        mImageView.setLayoutParams(new RelativeLayout.LayoutParams(
+                RelativeLayout.LayoutParams.MATCH_PARENT,
+                RelativeLayout.LayoutParams.MATCH_PARENT));
         
-        mSelectedPaint = new Paint();
-        mSelectedPaint.setColor(Color.argb(128, 0, 255, 255));
-        mSelectedPaint.setStyle(Paint.Style.FILL);
+        // 设置文本容器参数
+        mTextContainer.setLayoutParams(new RelativeLayout.LayoutParams(
+                RelativeLayout.LayoutParams.MATCH_PARENT,
+                RelativeLayout.LayoutParams.MATCH_PARENT));
+        mTextContainer.setClipChildren(false);
+        mTextContainer.setClipToPadding(false);
+        
+        // 将子视图添加到容器中
+        addView(mImageView);
+        addView(mTextContainer);
+        
+        // 初始化调试画笔（可选）
+        mDebugPaint = new Paint();
+        mDebugPaint.setColor(Color.argb(128, 0, 0, 0));
+        mDebugPaint.setStyle(Paint.Style.FILL);
         
         // 初始化变量
         mOcrResults = new ArrayList<>();
-        mTextRects = new ArrayList<>();
-        mTextList = new ArrayList<>();
-        mSelectedRect = null;
-        mSelectedIndex = -1;
-        mIsSelecting = false;
-        
-        // 获取触摸阈值
-        mTouchSlop = ViewConfiguration.get(getContext()).getScaledTouchSlop();
-        
-        // 设置触摸监听
-        setOnTouchListener(new OnTouchListener() {
-            @Override
-            public boolean onTouch(View v, MotionEvent event) {
-                return handleTouchEvent(event);
-            }
-        });
+        mTextViews = new ArrayList<>();
     }
     
-    @Override
     public void setImageBitmap(Bitmap bitmap) {
-        super.setImageBitmap(bitmap);
+        mImageView.setImageBitmap(bitmap);
         mBitmap = bitmap;
         clearOcrResults();
     }
@@ -100,18 +91,25 @@ public class OcrImageView extends androidx.appcompat.widget.AppCompatImageView {
      * 设置OCR识别结果
      */
     public void setOcrResults(List<RecResult> results) {
-        mOcrResults.clear();
-        mTextRects.clear();
-        mTextList.clear();
+        clearOcrResults();
         
         if (results != null && !results.isEmpty() && mBitmap != null) {
             mOcrResults.addAll(results);
             
-            // 获取ImageView的矩阵，该矩阵包含了图像的缩放和位移信息
-            android.graphics.Matrix imageMatrix = getImageMatrix();
+            // 获取ImageView的尺寸
+            int viewWidth = getWidth();
+            int viewHeight = getHeight();
             
-            // 创建一个用于转换坐标的数组
-            float[] points = new float[2];
+            // 获取图片的原始尺寸
+            int imageWidth = mBitmap.getWidth();
+            int imageHeight = mBitmap.getHeight();
+            
+            // 计算图片在ImageView中的实际显示区域
+            float scale = Math.min((float) viewWidth / imageWidth, (float) viewHeight / imageHeight);
+            float scaledWidth = imageWidth * scale;
+            float scaledHeight = imageHeight * scale;
+            float offsetX = (viewWidth - scaledWidth) / 2;
+            float offsetY = (viewHeight - scaledHeight) / 2;
             
             // 转换OCR结果的坐标到视图坐标系
             for (RecResult result : results) {
@@ -124,25 +122,23 @@ public class OcrImageView extends androidx.appcompat.widget.AppCompatImageView {
                     int bottom = Integer.MIN_VALUE;
                     
                     for (Point point : box) {
-                        // 将原始坐标转换为视图坐标
-                        points[0] = (float) point.x;
-                        points[1] = (float) point.y;
-                        imageMatrix.mapPoints(points);
+                        // 先将原始坐标缩放，然后添加偏移量
+                        float scaledX = (float) point.x * scale + offsetX;
+                        float scaledY = (float) point.y * scale + offsetY;
                         
-                        left = Math.min(left, (int) points[0]);
-                        top = Math.min(top, (int) points[1]);
-                        right = Math.max(right, (int) points[0]);
-                        bottom = Math.max(bottom, (int) points[1]);
+                        left = Math.min(left, (int) scaledX);
+                        top = Math.min(top, (int) scaledY);
+                        right = Math.max(right, (int) scaledX);
+                        bottom = Math.max(bottom, (int) scaledY);
                     }
                     
-                    Rect rect = new Rect(left, top, right, bottom);
-                    mTextRects.add(rect);
-                    mTextList.add(result.getText());
+                    // 创建TextView显示识别的文本
+                    TextView textView = createTextView(result.getText(), new Rect(left, top, right, bottom));
+                    mTextViews.add(textView);
+                    mTextContainer.addView(textView);
                 }
             }
         }
-        
-        invalidate();
     }
     
     /**
@@ -150,40 +146,45 @@ public class OcrImageView extends androidx.appcompat.widget.AppCompatImageView {
      */
     public void clearOcrResults() {
         mOcrResults.clear();
-        mTextRects.clear();
-        mTextList.clear();
-        mSelectedRect = null;
-        mSelectedIndex = -1;
-        invalidate();
+        mTextViews.clear();
+        mTextContainer.removeAllViews();
     }
     
-    @Override
-    protected void onDraw(Canvas canvas) {
-        super.onDraw(canvas);
+    /**
+     * 创建用于显示识别文本的TextView
+     */
+    private TextView createTextView(String text, Rect rect) {
+        TextView textView = new TextView(getContext());
         
-        // 绘制OCR识别结果的文本框
-        for (int i = 0; i < mTextRects.size(); i++) {
-            Rect rect = mTextRects.get(i);
-            
-            // 如果是选中的文本框，绘制选中效果
-            if (i == mSelectedIndex) {
-                canvas.drawRect(rect, mSelectedPaint);
-            } else {
-                // 绘制半透明背景，替换原来的红框
-                canvas.drawRect(rect, mRectPaint);
-            }
-            
-            // 绘制文本内容（自动调整字体大小）
-            String text = mTextList.get(i);
-            if (!text.isEmpty()) {
-                // 计算合适的字体大小
-                float textSize = calculateOptimalFontSize(text, rect, mTextPaint);
-                mTextPaint.setTextSize(textSize);
-                
-                // 绘制文本
-                canvas.drawText(text, rect.left + 5, rect.top + textSize - 5, mTextPaint);
-            }
-        }
+        // 设置文本内容
+        textView.setText(text);
+        
+        // 设置文本样式
+        textView.setTextColor(Color.WHITE);
+        textView.setShadowLayer(2f, 1f, 1f, Color.BLACK);
+        textView.setPadding(5, 5, 5, 5);
+        
+        // 设置背景
+        textView.setBackgroundColor(Color.argb(128, 0, 0, 0));
+        
+        // 设置文本选择功能
+        textView.setTextIsSelectable(true);
+        textView.setFocusable(true);
+        textView.setFocusableInTouchMode(true);
+        
+        // 计算合适的字体大小
+        textView.setTextSize(16); // 初始字体大小
+        float textSize = calculateOptimalFontSize(text, rect, textView.getPaint());
+        textView.setTextSize(pxToSp(getContext(), textSize));
+        
+        // 设置TextView的位置和大小
+        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
+                rect.width(), rect.height());
+        params.leftMargin = rect.left;
+        params.topMargin = rect.top;
+        textView.setLayoutParams(params);
+        
+        return textView;
     }
     
     /**
@@ -191,7 +192,7 @@ public class OcrImageView extends androidx.appcompat.widget.AppCompatImageView {
      * @param text 要绘制的文本
      * @param rect 文本框矩形
      * @param paint 绘制文本的画笔
-     * @return 最佳字体大小
+     * @return 最佳字体大小（像素）
      */
     private float calculateOptimalFontSize(String text, Rect rect, Paint paint) {
         // 计算文本框的可用宽度和高度
@@ -217,67 +218,30 @@ public class OcrImageView extends androidx.appcompat.widget.AppCompatImageView {
     }
     
     /**
-     * 处理触摸事件
+     * 将像素值转换为sp单位
      */
-    private boolean handleTouchEvent(MotionEvent event) {
-        float x = event.getX();
-        float y = event.getY();
-        
-        switch (event.getAction()) {
-            case MotionEvent.ACTION_DOWN:
-                mDownX = x;
-                mDownY = y;
-                mIsSelecting = true;
-                mSelectedIndex = -1;
-                mSelectedRect = null;
-                break;
-                
-            case MotionEvent.ACTION_MOVE:
-                // 如果移动距离超过触摸阈值，认为是滚动，不处理选择
-                if (Math.abs(x - mDownX) > mTouchSlop || Math.abs(y - mDownY) > mTouchSlop) {
-                    mIsSelecting = false;
-                }
-                break;
-                
-            case MotionEvent.ACTION_UP:
-                if (mIsSelecting) {
-                    // 检查是否点击了某个文本框
-                    for (int i = 0; i < mTextRects.size(); i++) {
-                        Rect rect = mTextRects.get(i);
-                        if (rect.contains((int) x, (int) y)) {
-                            mSelectedIndex = i;
-                            mSelectedRect = rect;
-                            
-                            // 显示文本选择器
-                            showTextSelection(i, x, y);
-                            break;
-                        }
-                    }
-                }
-                invalidate();
-                break;
-        }
-        
-        return false; // 返回false，让ScrollView可以继续处理滚动事件
+    private float pxToSp(Context context, float px) {
+        return px / context.getResources().getDisplayMetrics().scaledDensity;
     }
     
     /**
-     * 显示文本选择器
+     * 暴露ImageView的getImageMatrix方法
      */
-    private void showTextSelection(int index, float x, float y) {
-        if (index >= 0 && index < mTextList.size()) {
-            String text = mTextList.get(index);
-            
-            // 这里我们使用Toast来显示选择的文本，实际应用中可以使用更复杂的UI组件
-            // 在实际产品中，应该实现系统级的文本选择器
-            Toast.makeText(getContext(), "已选择：" + text + "\n点击复制", Toast.LENGTH_SHORT).show();
-            
-            // 简单实现复制到剪贴板
-            android.content.ClipboardManager clipboard = (android.content.ClipboardManager) getContext().getSystemService(Context.CLIPBOARD_SERVICE);
-            android.content.ClipData clip = android.content.ClipData.newPlainText("OCR文本", text);
-            clipboard.setPrimaryClip(clip);
-            
-            Toast.makeText(getContext(), "已复制到剪贴板", Toast.LENGTH_SHORT).show();
-        }
+    public android.graphics.Matrix getImageMatrix() {
+        return mImageView.getImageMatrix();
+    }
+    
+    /**
+     * 设置ImageView的ScaleType
+     */
+    public void setScaleType(ImageView.ScaleType scaleType) {
+        mImageView.setScaleType(scaleType);
+    }
+    
+    /**
+     * 获取ImageView
+     */
+    public ImageView getImageView() {
+        return mImageView;
     }
 }
