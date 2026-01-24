@@ -117,6 +117,10 @@ public class MainActivity extends AppCompatActivity {
         modelList.add(new OcrModel("西里尔文字识别模型", "cyrillic_PP-OCRv5_rec_mobile_infer.onnx"));
         modelList.add(new OcrModel("泰文字识别模型", "th_PP-OCRv5_rec_mobile_infer.onnx"));
         modelList.add(new OcrModel("泰米尔文字识别模型", "ta_PP-OCRv5_rec_mobile_infer.onnx"));
+        modelList.add(new OcrModel("英文识别模型", "en_PP-OCRv5_rec_mobile_infer.onnx"));
+        modelList.add(new OcrModel("希腊文字识别模型", "el_PP-OCRv5_rec_mobile_infer.onnx"));
+        modelList.add(new OcrModel("梵文识别模型", "devanagari_PP-OCRv5_rec_mobile_infer.onnx"));
+        modelList.add(new OcrModel("中文服务器版识别模型", "ch_PP-OCRv5_rec_server_infer.onnx"));
         
         // 设置只有中文模型默认选中，其他模型默认不选中
         for (int i = 1; i < modelList.size(); i++) {
