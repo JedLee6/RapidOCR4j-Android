@@ -164,7 +164,12 @@ public class OcrImageView extends RelativeLayout {
         // 设置文本样式
         textView.setTextColor(Color.WHITE);
         textView.setShadowLayer(2f, 1f, 1f, Color.BLACK);
-        textView.setPadding(5, 5, 5, 5);
+        // 移除默认padding，设置为0
+        textView.setPadding(0, 0, 0, 0);
+        // 移除字体上下留白
+        textView.setIncludeFontPadding(false);
+        // 设置行间距为0
+        textView.setLineSpacing(0, 1f);
         
         // 设置背景
         textView.setBackgroundColor(Color.argb(128, 0, 0, 0));
