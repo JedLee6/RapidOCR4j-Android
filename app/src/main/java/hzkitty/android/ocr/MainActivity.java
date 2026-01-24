@@ -20,9 +20,11 @@ import android.widget.Toast;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 import hzkitty.android.ocr.adapter.ModelListAdapter;
+import hzkitty.android.ocr.adapter.RecResultAdapter;
 import hzkitty.android.ocr.model.OcrModel;
 
 import io.github.hzkitty.RapidOCR;
@@ -41,6 +43,8 @@ public class MainActivity extends AppCompatActivity {
     private Switch swTextVisible;
     private SeekBar sbTextOpacity;
     private Switch swMergeText;
+    private RecyclerView rvRecResult;
+    private RecResultAdapter recResultAdapter;
     private RapidOCR rapidOCR;
     
     // 保存上次的识别结果，用于开关切换时重新处理
@@ -108,6 +112,12 @@ public class MainActivity extends AppCompatActivity {
                 // 停止拖动时不需要特殊处理
             }
         });
+        
+        // 初始化识别结果详细信息RecyclerView
+        rvRecResult = findViewById(R.id.rv_rec_result);
+        rvRecResult.setLayoutManager(new LinearLayoutManager(this));
+        recResultAdapter = new RecResultAdapter(Collections.emptyList());
+        rvRecResult.setAdapter(recResultAdapter);
         
         // 智能合并文本开关的监听器
         swMergeText.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
@@ -382,6 +392,14 @@ public class MainActivity extends AppCompatActivity {
                         
                         // 在文本区域显示识别结果和耗时信息
                         tvOcrResult.setText(resultBuilder.toString());
+                        
+                        // 更新识别结果详细信息
+                        if (finalOcrResult.getRecRes() != null && !finalOcrResult.getRecRes().isEmpty()) {
+                            recResultAdapter.updateData(finalOcrResult.getRecRes());
+                            rvRecResult.setVisibility(View.VISIBLE);
+                        } else {
+                            rvRecResult.setVisibility(View.GONE);
+                        }
                         
                         // 将OCR结果传递给OcrImageView，以便在图片上显示文本框和支持文本选择
                         ivSelectedImage.setOcrResults(finalOcrResult.getRecRes());

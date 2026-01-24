@@ -106,8 +106,7 @@
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
                 android:layout_marginTop="16dp"
-                android:padding="12dp"
-                android:background="@android:drawable/dialog_holo_light_frame">
+                android:padding="12dp">
 
                 <!-- 文本显示开关 -->
                 <LinearLayout
@@ -214,6 +213,26 @@
                 android:lineSpacingExtra="4dp"
                 android:textIsSelectable="true"
                 tools:text="OCR识别结果将显示在这里" />
+
+            <!-- 识别结果详细信息 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:layout_marginBottom="16dp">
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="识别框详细信息"
+                    android:textSize="18sp"
+                    android:textStyle="bold"
+                    android:layout_marginBottom="8dp" />
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/rv_rec_result"
+                    android:layout_width="match_parent"
+                    android:layout_height="400dp"
+                    android:padding="8dp"/>
+            </LinearLayout>
 
         </LinearLayout>
 
