@@ -15,14 +15,13 @@
         android:textSize="16sp" />
 
     <TextView
-        android:id="@+id/tv_model_name"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:textSize="16sp"
-        android:textColor="@android:color/black"
-        android:singleLine="true"
-        android:ellipsize="end"
-        android:text="模型名称" />
+            android:id="@+id/tv_model_name"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textSize="16sp"
+            android:singleLine="true"
+            android:ellipsize="end"
+            android:text="@string/model_name_placeholder" />
 
 </LinearLayout>

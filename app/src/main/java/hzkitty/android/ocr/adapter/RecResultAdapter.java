@@ -42,13 +42,13 @@ public class RecResultAdapter extends RecyclerView.Adapter<RecResultAdapter.RecR
         holder.tvText.setText(recResult.getText());
         
         // 设置置信度
-        String confidenceText = String.format("置信度: %.2f%%", recResult.getConfidence() * 100);
+        String confidenceText = String.format(holder.itemView.getContext().getString(R.string.confidence_format), recResult.getConfidence() * 100);
         holder.tvConfidence.setText(confidenceText);
         
         // 设置坐标信息
         Point[] dtBoxes = recResult.getDtBoxes();
         StringBuilder coordinatesBuilder = new StringBuilder();
-        coordinatesBuilder.append("坐标:");
+        coordinatesBuilder.append(holder.itemView.getContext().getString(R.string.coordinates));
         
         if (dtBoxes != null && dtBoxes.length > 0) {
             for (int i = 0; i < dtBoxes.length; i++) {
@@ -59,7 +59,7 @@ public class RecResultAdapter extends RecyclerView.Adapter<RecResultAdapter.RecR
                 coordinatesBuilder.append(String.format("(%.1f, %.1f)", point.x, point.y));
             }
         } else {
-            coordinatesBuilder.append("无");
+            coordinatesBuilder.append(holder.itemView.getContext().getString(R.string.none));
         }
         
         holder.tvCoordinates.setText(coordinatesBuilder.toString());
@@ -67,7 +67,7 @@ public class RecResultAdapter extends RecyclerView.Adapter<RecResultAdapter.RecR
         // 设置边框信息
         if (recResult.getWordBoxResult() != null) {
             holder.tvBoxInfo.setVisibility(View.VISIBLE);
-            holder.tvBoxInfo.setText("单词边框: " + recResult.getWordBoxResult().toString());
+            holder.tvBoxInfo.setText(holder.itemView.getContext().getString(R.string.word_box) + recResult.getWordBoxResult().toString());
         } else {
             holder.tvBoxInfo.setVisibility(View.GONE);
         }

@@ -38,7 +38,7 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:text="选择图片"
+                    android:text="@string/btn_select_image"
                     android:layout_marginEnd="8dp" />
 
                 <Button
@@ -46,7 +46,7 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:text="拍照" />
+                    android:text="@string/btn_take_photo" />
             </LinearLayout>
 
             <!-- 模型选择区域 -->
@@ -60,7 +60,7 @@
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="选择文本识别模型（可多选）"
+                    android:text="@string/text_select_recognition_models"
                     android:textSize="18sp"
                     android:textStyle="bold"
                     android:layout_marginBottom="8dp" />
@@ -84,7 +84,7 @@
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="选择检测模型（单选）"
+                    android:text="@string/text_select_detection_model"
                     android:textSize="18sp"
                     android:textStyle="bold"
                     android:layout_marginBottom="8dp" />
@@ -99,7 +99,7 @@
                         android:id="@+id/rb_det_mobile"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="移动端检测模型"
+                        android:text="@string/det_model_mobile"
                         android:textSize="16sp"
                         android:tag="ch_PP-OCRv5_mobile_det.onnx"
                         android:checked="true" />
@@ -108,7 +108,7 @@
                         android:id="@+id/rb_det_server"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="服务器端检测模型"
+                        android:text="@string/det_model_server"
                         android:textSize="16sp"
                         android:tag="ch_PP-OCRv5_server_det.onnx" />
 
@@ -137,7 +137,7 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:text="显示悬浮文本及阴影背景"
+                        android:text="@string/text_show_floating_text"
                         android:textSize="16sp" />
 
                     <Switch
@@ -156,7 +156,7 @@
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="悬浮文本背景透明度"
+                        android:text="@string/text_text_opacity"
                         android:textSize="16sp"
                         android:layout_marginBottom="8dp" />
 
@@ -176,7 +176,7 @@
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
                             android:layout_weight="1"
-                            android:text="0%"
+                            android:text="@string/text_percentage_0"
                             android:textSize="14sp"
                             android:textColor="@android:color/darker_gray" />
 
@@ -185,7 +185,7 @@
                             android:layout_height="wrap_content"
                             android:layout_weight="1"
                             android:gravity="right"
-                            android:text="100%"
+                            android:text="@string/text_percentage_100"
                             android:textSize="14sp"
                             android:textColor="@android:color/darker_gray" />
                     </LinearLayout>
@@ -211,7 +211,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="智能合并文本:"
+                    android:text="@string/text_smart_merge"
                     android:textSize="16sp"
                     android:layout_marginEnd="16dp" />
                 <Switch
@@ -227,9 +227,9 @@
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="16dp"
                 android:textSize="16sp"
-                android:lineSpacingExtra="4dp"
-                android:textIsSelectable="true"
-                tools:text="OCR识别结果将显示在这里" />
+                    android:lineSpacingExtra="4dp"
+                    android:textIsSelectable="true"
+                    tools:text="@string/ocr_result_placeholder" />
 
             <!-- 识别结果详细信息 -->
             <LinearLayout
@@ -240,7 +240,7 @@
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="识别框详细信息"
+                    android:text="@string/text_recognition_box_details"
                     android:textSize="18sp"
                     android:textStyle="bold"
                     android:layout_marginBottom="8dp" />

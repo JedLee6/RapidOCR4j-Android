@@ -153,14 +153,14 @@ public class MainActivity extends AppCompatActivity {
                     }
                     
                     StringBuilder resultBuilder = new StringBuilder();
-                    resultBuilder.append("识别结果：\n")
+                    resultBuilder.append(getString(R.string.ocr_result)).append("\n")
                             .append(ocrText)
                             .append("\n\n")
-                            .append("耗时统计：\n")
-                            .append("总耗时：").append(String.format("%.2f", lastOcrResult.getElapseTime() * 1000)).append("ms\n")
-                            .append("检测耗时：").append(String.format("%.2f", lastOcrResult.getDetTime() * 1000)).append("ms\n")
-                            .append("分类耗时：").append(String.format("%.2f", lastOcrResult.getClsTime() * 1000)).append("ms\n")
-                            .append("识别耗时：").append(String.format("%.2f", lastOcrResult.getRecTime() * 1000)).append("ms");
+                            .append(getString(R.string.time_statistics)).append("\n")
+                            .append(getString(R.string.total_time)).append(String.format("%.2f", lastOcrResult.getElapseTime() * 1000)).append("ms\n")
+                            .append(getString(R.string.detect_time)).append(String.format("%.2f", lastOcrResult.getDetTime() * 1000)).append("ms\n")
+                            .append(getString(R.string.classify_time)).append(String.format("%.2f", lastOcrResult.getClsTime() * 1000)).append("ms\n")
+                            .append(getString(R.string.recognize_time)).append(String.format("%.2f", lastOcrResult.getRecTime() * 1000)).append("ms");
                     
                     tvOcrResult.setText(resultBuilder.toString());
                 }
@@ -188,18 +188,18 @@ public class MainActivity extends AppCompatActivity {
      */
     private void initModelList() {
         modelList = new ArrayList<>();
-        modelList.add(new OcrModel("中文识别模型", "ch_PP-OCRv5_rec_mobile_infer.onnx"));
-        modelList.add(new OcrModel("拉丁文字识别模型", "latin_PP-OCRv5_rec_mobile_infer.onnx"));
-        modelList.add(new OcrModel("阿拉伯文字识别模型", "arabic_PP-OCRv5_rec_mobile_infer.onnx"));
-        modelList.add(new OcrModel("斯拉夫文字识别模型", "eslav_PP-OCRv5_rec_mobile_infer.onnx"));
-        modelList.add(new OcrModel("韩文字识别模型", "korean_PP-OCRv5_rec_mobile_infer.onnx"));
-        modelList.add(new OcrModel("西里尔文字识别模型", "cyrillic_PP-OCRv5_rec_mobile_infer.onnx"));
-        modelList.add(new OcrModel("泰文字识别模型", "th_PP-OCRv5_rec_mobile_infer.onnx"));
-        modelList.add(new OcrModel("泰米尔文字识别模型", "ta_PP-OCRv5_rec_mobile_infer.onnx"));
-        modelList.add(new OcrModel("英文识别模型", "en_PP-OCRv5_rec_mobile_infer.onnx"));
-        modelList.add(new OcrModel("希腊文字识别模型", "el_PP-OCRv5_rec_mobile_infer.onnx"));
-        modelList.add(new OcrModel("梵文识别模型", "devanagari_PP-OCRv5_rec_mobile_infer.onnx"));
-        modelList.add(new OcrModel("中文服务器版识别模型", "ch_PP-OCRv5_rec_server_infer.onnx"));
+        modelList.add(new OcrModel(getString(R.string.model_chinese), "ch_PP-OCRv5_rec_mobile_infer.onnx"));
+        modelList.add(new OcrModel(getString(R.string.model_latin), "latin_PP-OCRv5_rec_mobile_infer.onnx"));
+        modelList.add(new OcrModel(getString(R.string.model_arabic), "arabic_PP-OCRv5_rec_mobile_infer.onnx"));
+        modelList.add(new OcrModel(getString(R.string.model_slavic), "eslav_PP-OCRv5_rec_mobile_infer.onnx"));
+        modelList.add(new OcrModel(getString(R.string.model_korean), "korean_PP-OCRv5_rec_mobile_infer.onnx"));
+        modelList.add(new OcrModel(getString(R.string.model_cyrillic), "cyrillic_PP-OCRv5_rec_mobile_infer.onnx"));
+        modelList.add(new OcrModel(getString(R.string.model_thai), "th_PP-OCRv5_rec_mobile_infer.onnx"));
+        modelList.add(new OcrModel(getString(R.string.model_tamil), "ta_PP-OCRv5_rec_mobile_infer.onnx"));
+        modelList.add(new OcrModel(getString(R.string.model_english), "en_PP-OCRv5_rec_mobile_infer.onnx"));
+        modelList.add(new OcrModel(getString(R.string.model_greek), "el_PP-OCRv5_rec_mobile_infer.onnx"));
+        modelList.add(new OcrModel(getString(R.string.model_devanagari), "devanagari_PP-OCRv5_rec_mobile_infer.onnx"));
+        modelList.add(new OcrModel(getString(R.string.model_chinese_server), "ch_PP-OCRv5_rec_server_infer.onnx"));
         
         // 设置只有中文模型默认选中，其他模型默认不选中
         for (int i = 1; i < modelList.size(); i++) {
@@ -245,7 +245,7 @@ public class MainActivity extends AppCompatActivity {
             } catch (IOException ex) {
                 // 处理异常
                 ex.printStackTrace();
-                Toast.makeText(this, "创建图片文件失败", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, getString(R.string.msg_create_file_failed), Toast.LENGTH_SHORT).show();
             }
             // 如果文件创建成功，继续处理
             if (photoFile != null) {
@@ -261,7 +261,7 @@ public class MainActivity extends AppCompatActivity {
                 startActivityForResult(takePictureIntent, REQUEST_IMAGE_CAPTURE);
             }
         } else {
-            Toast.makeText(this, "没有可用的相机应用", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, getString(R.string.msg_no_camera_app), Toast.LENGTH_SHORT).show();
         }
     }
     
@@ -298,7 +298,7 @@ public class MainActivity extends AppCompatActivity {
                 performOCR(bitmap);
             } catch (IOException e) {
                 e.printStackTrace();
-                Toast.makeText(this, "图片加载失败", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, getString(R.string.msg_image_load_failed), Toast.LENGTH_SHORT).show();
             }
         } else if (requestCode == REQUEST_IMAGE_CAPTURE && resultCode == RESULT_OK) {
             // 从文件中加载高分辨率图片
@@ -314,7 +314,7 @@ public class MainActivity extends AppCompatActivity {
                     ivSelectedImage.setImageBitmap(bitmap);
                     performOCR(bitmap);
                 } else {
-                    Toast.makeText(this, "加载图片失败", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, getString(R.string.msg_image_load_failed), Toast.LENGTH_SHORT).show();
                 }
             } catch (Exception e) {
                 e.printStackTrace();
@@ -494,14 +494,14 @@ public class MainActivity extends AppCompatActivity {
                             ocrText = mergeTextSmartly(ocrText);
                         }
                         
-                        resultBuilder.append("识别结果：\n")
+                        resultBuilder.append(getString(R.string.ocr_result)).append("\n")
                                 .append(ocrText)
                                 .append("\n\n")
-                                .append("耗时统计：\n")
-                                .append("总耗时：").append(String.format("%.2f", finalOcrResult.getElapseTime() * 1000)).append("ms\n")
-                                .append("检测耗时：").append(String.format("%.2f", finalOcrResult.getDetTime() * 1000)).append("ms\n")
-                                .append("分类耗时：").append(String.format("%.2f", finalOcrResult.getClsTime() * 1000)).append("ms\n")
-                                .append("识别耗时：").append(String.format("%.2f", finalOcrResult.getRecTime() * 1000)).append("ms");
+                                .append(getString(R.string.time_statistics)).append("\n")
+                                .append(getString(R.string.total_time)).append(String.format("%.2f", finalOcrResult.getElapseTime() * 1000)).append("ms\n")
+                                .append(getString(R.string.detect_time)).append(String.format("%.2f", finalOcrResult.getDetTime() * 1000)).append("ms\n")
+                                .append(getString(R.string.classify_time)).append(String.format("%.2f", finalOcrResult.getClsTime() * 1000)).append("ms\n")
+                                .append(getString(R.string.recognize_time)).append(String.format("%.2f", finalOcrResult.getRecTime() * 1000)).append("ms");
                         
                         // 在文本区域显示识别结果和耗时信息
                         tvOcrResult.setText(resultBuilder.toString());

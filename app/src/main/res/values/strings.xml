@@ -1,3 +1,58 @@
 <resources>
     <string name="app_name">RapidOcrAndroid4j</string>
+
+    <!-- Button texts -->
+    <string name="btn_select_image">Select Image</string>
+    <string name="btn_take_photo">Take Photo</string>
+
+    <!-- Model selection -->
+    <string name="text_select_recognition_models">Select Text Recognition Models (Multiple Selection)</string>
+    <string name="text_select_detection_model">Select Detection Model (Single Selection)</string>
+    <string name="det_model_mobile">Mobile Detection Model</string>
+    <string name="det_model_server">Server Detection Model</string>
+
+    <!-- Text display controls -->
+    <string name="text_show_floating_text">Show Floating Text &amp; Shadow Background</string>
+    <string name="text_text_opacity">Floating Text Background Opacity</string>
+    <string name="text_percentage_0">0%</string>
+    <string name="text_percentage_100">100%</string>
+
+    <!-- Text merging -->
+    <string name="text_smart_merge">Smart Merge Text:</string>
+
+    <!-- Recognition results -->
+    <string name="text_recognition_box_details">Recognition Box Details</string>
+    <string name="ocr_result_placeholder">OCR recognition results will be displayed here</string>
+    <string name="model_name_placeholder">Model Name</string>
+    <string name="msg_no_camera_app">No camera app available</string>
+    <string name="msg_image_load_failed">Image loading failed</string>
+    
+    <!-- Model names -->
+    <string name="model_chinese">Chinese Recognition Model</string>
+    <string name="model_latin">Latin Recognition Model</string>
+    <string name="model_arabic">Arabic Recognition Model</string>
+    <string name="model_slavic">Slavic Recognition Model</string>
+    <string name="model_korean">Korean Recognition Model</string>
+    <string name="model_cyrillic">Cyrillic Recognition Model</string>
+    <string name="model_thai">Thai Recognition Model</string>
+    <string name="model_tamil">Tamil Recognition Model</string>
+    <string name="model_english">English Recognition Model</string>
+    <string name="model_greek">Greek Recognition Model</string>
+    <string name="model_devanagari">Devanagari Recognition Model</string>
+    <string name="model_chinese_server">Chinese Server Recognition Model</string>
+    
+    <!-- UI messages -->
+    <string name="msg_create_file_failed">Failed to create image file</string>
+    <string name="ocr_result">OCR Result:</string>
+    <string name="time_statistics">Time Statistics:</string>
+    <string name="total_time">Total Time:</string>
+    <string name="detect_time">Detection Time:</string>
+    <string name="classify_time">Classification Time:</string>
+    <string name="recognize_time">Recognition Time:</string>
+    
+    <!-- Recognition result details -->
+    <string name="confidence_format">Confidence: %.2f%%</string>
+    <string name="coordinates">Coordinates:</string>
+    <string name="none">None</string>
+    <string name="word_box">Word Box: </string>
 </resources>
