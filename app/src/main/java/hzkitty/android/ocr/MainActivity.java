@@ -64,11 +64,16 @@ public class MainActivity extends AppCompatActivity {
             recConfig.setRecImgShape(new int[]{3, 48, 240}); // 减小识别模型输入宽度
             recConfig.setIntraOpNumThreads(4); // 设置推理线程数
             recConfig.setInterOpNumThreads(2); // 设置操作间线程数
+            // 使用v5识别模型
+            recConfig.setModelPath("ch_PP-OCRv5_rec_mobile_infer.onnx"); // 使用v5识别模型
             
             // 检测模块配置优化
             OcrConfig.DetConfig detConfig = config.getDet();
+            detConfig.setModelPath("ch_PP-OCRv5_mobile_det.onnx"); // 使用v5检测模型
             detConfig.setBoxThresh(0.5f); // 提高检测阈值，减少检测框数量
             detConfig.setUnclipRatio(1.2f); // 调整文本框膨胀系数
+            
+
             
             rapidOCR = RapidOCR.create(this, config);
         } catch (Exception e) {
