@@ -26,6 +26,7 @@ import java.util.Date;
 
 import io.github.hzkitty.RapidOCR;
 import io.github.hzkitty.entity.OcrResult;
+import io.github.hzkitty.entity.OcrConfig;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -47,9 +48,29 @@ public class MainActivity extends AppCompatActivity {
         ivSelectedImage = findViewById(R.id.iv_selected_image);
         tvOcrResult = findViewById(R.id.tv_ocr_result);
 
-        // 初始化RapidOCR
+        // 初始化RapidOCR，配置参数以提高识别速度
         try {
-            rapidOCR = RapidOCR.create(this);
+            OcrConfig config = new OcrConfig();
+            
+            // 全局配置优化
+            OcrConfig.GlobalConfig globalConfig = config.getGlobal();
+            globalConfig.setUseCls(false); // 关闭分类模块（如果图片方向已知）
+            globalConfig.setMaxSideLen(800); // 限制图片最大边长（减小图片尺寸）
+            globalConfig.setReturnWordBox(false); // 关闭返回单词级别的框
+            
+            // 识别模块配置优化
+            OcrConfig.RecConfig recConfig = config.getRec();
+            recConfig.setRecBatchNum(4); // 增加批处理大小
+            recConfig.setRecImgShape(new int[]{3, 48, 240}); // 减小识别模型输入宽度
+            recConfig.setIntraOpNumThreads(4); // 设置推理线程数
+            recConfig.setInterOpNumThreads(2); // 设置操作间线程数
+            
+            // 检测模块配置优化
+            OcrConfig.DetConfig detConfig = config.getDet();
+            detConfig.setBoxThresh(0.5f); // 提高检测阈值，减少检测框数量
+            detConfig.setUnclipRatio(1.2f); // 调整文本框膨胀系数
+            
+            rapidOCR = RapidOCR.create(this, config);
         } catch (Exception e) {
             e.printStackTrace();
             Toast.makeText(this, "OCR初始化失败", Toast.LENGTH_SHORT).show();
@@ -125,8 +146,19 @@ public class MainActivity extends AppCompatActivity {
                     } else {
                         // 识别成功
 
-                        // 同时在文本区域显示识别结果
-                        tvOcrResult.setText(finalOcrResult.getStrRes());
+                        // 构建包含耗时信息的识别结果
+                        StringBuilder resultBuilder = new StringBuilder();
+                        resultBuilder.append("识别结果：\n")
+                                .append(finalOcrResult.getStrRes())
+                                .append("\n\n")
+                                .append("耗时统计：\n")
+                                .append("总耗时：").append(String.format("%.2f", finalOcrResult.getElapseTime() * 1000)).append("ms\n")
+                                .append("检测耗时：").append(String.format("%.2f", finalOcrResult.getDetTime() * 1000)).append("ms\n")
+                                .append("分类耗时：").append(String.format("%.2f", finalOcrResult.getClsTime() * 1000)).append("ms\n")
+                                .append("识别耗时：").append(String.format("%.2f", finalOcrResult.getRecTime() * 1000)).append("ms");
+                        
+                        // 在文本区域显示识别结果和耗时信息
+                        tvOcrResult.setText(resultBuilder.toString());
                     }
                 } finally {
                     // 恢复按钮状态
