@@ -57,6 +57,49 @@
 
             </LinearLayout>
 
+            <!-- 检测模型选择区域 -->
+            <LinearLayout
+                android:id="@+id/ll_det_model_selection"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:layout_marginTop="16dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="选择检测模型（单选）"
+                    android:textSize="18sp"
+                    android:textStyle="bold"
+                    android:layout_marginBottom="8dp" />
+
+                <RadioGroup
+                    android:id="@+id/rg_det_model"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+
+                    <RadioButton
+                        android:id="@+id/rb_det_mobile"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="移动端检测模型"
+                        android:textSize="16sp"
+                        android:tag="ch_PP-OCRv5_mobile_det.onnx"
+                        android:checked="true" />
+
+                    <RadioButton
+                        android:id="@+id/rb_det_server"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="服务器端检测模型"
+                        android:textSize="16sp"
+                        android:tag="ch_PP-OCRv5_server_det.onnx" />
+
+                </RadioGroup>
+
+            </LinearLayout>
+
 
             <hzkitty.android.ocr.OcrImageView
                 android:id="@+id/iv_selected_image"

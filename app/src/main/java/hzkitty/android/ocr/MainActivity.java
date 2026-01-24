@@ -1,30 +1,22 @@
 package hzkitty.android.ocr;
 
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
-import androidx.core.content.FileProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import android.content.Intent;
-import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.Bundle;
-import android.os.Environment;
 import android.provider.MediaStore;
 import android.view.View;
 import android.widget.Button;
+import android.widget.RadioGroup;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import java.io.File;
 import java.io.IOException;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.List;
 
 import hzkitty.android.ocr.adapter.ModelListAdapter;
@@ -37,12 +29,12 @@ import io.github.hzkitty.entity.OcrConfig;
 public class MainActivity extends AppCompatActivity {
 
     private static final int REQUEST_IMAGE_PICK = 1;
-    private static final int REQUEST_PERMISSIONS = 2;
 
     private Button btnSelectImage;
     private OcrImageView ivSelectedImage;
     private TextView tvOcrResult;
     private RecyclerView rvModelList;
+    private RadioGroup rgDetModel;
     private RapidOCR rapidOCR;
     
     private List<OcrModel> modelList;
@@ -54,17 +46,11 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         // 初始化UI组件
-        btnSelectImage = findViewById(R.id.btn_select_image);
-        ivSelectedImage = findViewById(R.id.iv_selected_image);
-        tvOcrResult = findViewById(R.id.tv_ocr_result);
-        rvModelList = findViewById(R.id.rv_model_list);
-        
+        initUI();
         // 初始化模型列表
         initModelList();
-        
-        // 初始化模型选择RecyclerView
+        // 初始化模型列表RecyclerView
         initModelRecyclerView();
-
         // 初始化RapidOCR
         initRapidOCR();
 
@@ -75,6 +61,59 @@ public class MainActivity extends AppCompatActivity {
                 selectImage();
             }
         });
+
+        // 设置检测模型选择监听器
+        rgDetModel.setOnCheckedChangeListener(new RadioGroup.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(RadioGroup group, int checkedId) {
+                // 当检测模型选择变化时，重新初始化RapidOCR
+                initRapidOCR();
+            }
+        });
+    }
+
+    /**
+     * 初始化UI组件
+     */
+    private void initUI() {
+        btnSelectImage = findViewById(R.id.btn_select_image);
+        ivSelectedImage = findViewById(R.id.iv_selected_image);
+        tvOcrResult = findViewById(R.id.tv_ocr_result);
+        rvModelList = findViewById(R.id.rv_model_list);
+        rgDetModel = findViewById(R.id.rg_det_model);
+    }
+
+    /**
+     * 初始化模型列表
+     */
+    private void initModelList() {
+        modelList = new ArrayList<>();
+        modelList.add(new OcrModel("中文识别模型", "ch_PP-OCRv5_rec_mobile_infer.onnx"));
+        modelList.add(new OcrModel("拉丁文字识别模型", "latin_PP-OCRv5_rec_mobile_infer.onnx"));
+        modelList.add(new OcrModel("阿拉伯文字识别模型", "arabic_PP-OCRv5_rec_mobile_infer.onnx"));
+        modelList.add(new OcrModel("斯拉夫文字识别模型", "eslav_PP-OCRv5_rec_mobile_infer.onnx"));
+        modelList.add(new OcrModel("韩文字识别模型", "korean_PP-OCRv5_rec_mobile_infer.onnx"));
+        modelList.add(new OcrModel("西里尔文字识别模型", "cyrillic_PP-OCRv5_rec_mobile_infer.onnx"));
+        modelList.add(new OcrModel("泰文字识别模型", "th_PP-OCRv5_rec_mobile_infer.onnx"));
+        modelList.add(new OcrModel("泰米尔文字识别模型", "ta_PP-OCRv5_rec_mobile_infer.onnx"));
+        modelList.add(new OcrModel("英文识别模型", "en_PP-OCRv5_rec_mobile_infer.onnx"));
+        modelList.add(new OcrModel("希腊文字识别模型", "el_PP-OCRv5_rec_mobile_infer.onnx"));
+        modelList.add(new OcrModel("梵文识别模型", "devanagari_PP-OCRv5_rec_mobile_infer.onnx"));
+        modelList.add(new OcrModel("中文服务器版识别模型", "ch_PP-OCRv5_rec_server_infer.onnx"));
+        
+        // 设置只有中文模型默认选中，其他模型默认不选中
+        for (int i = 1; i < modelList.size(); i++) {
+            modelList.get(i).setSelected(false);
+        }
+    }
+
+    /**
+     * 获取用户选择的检测模型
+     * @return 检测模型路径
+     */
+    private String getSelectedDetModel() {
+        int checkedId = rgDetModel.getCheckedRadioButtonId();
+        return (String) findViewById(checkedId).getTag();
     }
 
     // 选择图片
@@ -103,28 +142,6 @@ public class MainActivity extends AppCompatActivity {
                 e.printStackTrace();
                 Toast.makeText(this, "图片加载失败", Toast.LENGTH_SHORT).show();
             }
-        }
-    }
-
-    // 初始化模型列表
-    private void initModelList() {
-        modelList = new ArrayList<>();
-        modelList.add(new OcrModel("中文识别模型", "ch_PP-OCRv5_rec_mobile_infer.onnx"));
-        modelList.add(new OcrModel("拉丁文字识别模型", "latin_PP-OCRv5_rec_mobile_infer.onnx"));
-        modelList.add(new OcrModel("阿拉伯文字识别模型", "arabic_PP-OCRv5_rec_mobile_infer.onnx"));
-        modelList.add(new OcrModel("斯拉夫文字识别模型", "eslav_PP-OCRv5_rec_mobile_infer.onnx"));
-        modelList.add(new OcrModel("韩文字识别模型", "korean_PP-OCRv5_rec_mobile_infer.onnx"));
-        modelList.add(new OcrModel("西里尔文字识别模型", "cyrillic_PP-OCRv5_rec_mobile_infer.onnx"));
-        modelList.add(new OcrModel("泰文字识别模型", "th_PP-OCRv5_rec_mobile_infer.onnx"));
-        modelList.add(new OcrModel("泰米尔文字识别模型", "ta_PP-OCRv5_rec_mobile_infer.onnx"));
-        modelList.add(new OcrModel("英文识别模型", "en_PP-OCRv5_rec_mobile_infer.onnx"));
-        modelList.add(new OcrModel("希腊文字识别模型", "el_PP-OCRv5_rec_mobile_infer.onnx"));
-        modelList.add(new OcrModel("梵文识别模型", "devanagari_PP-OCRv5_rec_mobile_infer.onnx"));
-        modelList.add(new OcrModel("中文服务器版识别模型", "ch_PP-OCRv5_rec_server_infer.onnx"));
-        
-        // 设置只有中文模型默认选中，其他模型默认不选中
-        for (int i = 1; i < modelList.size(); i++) {
-            modelList.get(i).setSelected(false);
         }
     }
     
@@ -164,7 +181,7 @@ public class MainActivity extends AppCompatActivity {
             
             // 设置检测模块配置
             OcrConfig.DetConfig detConfig = config.getDet();
-            detConfig.setModelPath("ch_PP-OCRv5_mobile_det.onnx"); // 使用v5检测模型
+            detConfig.setModelPath(getSelectedDetModel()); // 使用用户选择的检测模型
             
             // 查找第一个选中的模型作为默认模型
             boolean hasSelectedModel = false;
@@ -256,6 +273,4 @@ public class MainActivity extends AppCompatActivity {
             });
         }).start();
     }
-
-
 }
