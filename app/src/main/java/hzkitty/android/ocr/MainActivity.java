@@ -11,7 +11,10 @@ import android.os.Bundle;
 import android.provider.MediaStore;
 import android.view.View;
 import android.widget.Button;
+import android.widget.CompoundButton;
 import android.widget.RadioGroup;
+import android.widget.SeekBar;
+import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -35,6 +38,8 @@ public class MainActivity extends AppCompatActivity {
     private TextView tvOcrResult;
     private RecyclerView rvModelList;
     private RadioGroup rgDetModel;
+    private Switch swTextVisible;
+    private SeekBar sbTextOpacity;
     private RapidOCR rapidOCR;
     
     private List<OcrModel> modelList;
@@ -70,6 +75,34 @@ public class MainActivity extends AppCompatActivity {
                 initRapidOCR();
             }
         });
+        
+        // 设置文本显示开关的监听器
+        swTextVisible.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                ivSelectedImage.setTextVisible(isChecked);
+            }
+        });
+        
+        // 设置文本透明度滑块的监听器
+        sbTextOpacity.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                // 将进度值（0-100）转换为透明度值（0.0-1.0）
+                float opacity = progress / 100.0f;
+                ivSelectedImage.setTextOpacity(opacity);
+            }
+            
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+                // 开始拖动时不需要特殊处理
+            }
+            
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+                // 停止拖动时不需要特殊处理
+            }
+        });
     }
 
     /**
@@ -81,6 +114,8 @@ public class MainActivity extends AppCompatActivity {
         tvOcrResult = findViewById(R.id.tv_ocr_result);
         rvModelList = findViewById(R.id.rv_model_list);
         rgDetModel = findViewById(R.id.rg_det_model);
+        swTextVisible = findViewById(R.id.sw_text_visible);
+        sbTextOpacity = findViewById(R.id.sb_text_opacity);
     }
 
     /**

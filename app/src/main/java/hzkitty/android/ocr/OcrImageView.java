@@ -35,6 +35,9 @@ public class OcrImageView extends RelativeLayout {
     
     private Paint mDebugPaint; // 仅用于调试，显示文本框边界
     
+    private boolean mTextVisible = true; // 文本及阴影背景的可见性
+    private float mTextOpacity = 0.5f; // 文本及阴影背景的透明度 (0.0 - 1.0)
+    
     public OcrImageView(Context context) {
         super(context);
         init();
@@ -171,8 +174,8 @@ public class OcrImageView extends RelativeLayout {
         // 设置行间距为0
         textView.setLineSpacing(0, 1f);
         
-        // 设置背景
-        textView.setBackgroundColor(Color.argb(128, 0, 0, 0));
+        // 设置背景透明度
+        updateTextViewAppearance(textView);
         
         // 设置文本选择功能
         textView.setTextIsSelectable(true);
@@ -262,5 +265,61 @@ public class OcrImageView extends RelativeLayout {
      */
     public ImageView getImageView() {
         return mImageView;
+    }
+    
+    /**
+     * 更新TextView的外观（可见性和透明度）
+     */
+    private void updateTextViewAppearance(TextView textView) {
+        // 设置可见性
+        textView.setVisibility(mTextVisible ? View.VISIBLE : View.GONE);
+        
+        // 设置背景透明度
+        int alpha = (int) (mTextOpacity * 255);
+        textView.setBackgroundColor(Color.argb(alpha, 0, 0, 0));
+        
+        // 更新阴影效果的可见性
+        if (mTextVisible) {
+            textView.setShadowLayer(2f, 1f, 1f, Color.BLACK);
+        } else {
+            textView.setShadowLayer(0f, 0f, 0f, Color.TRANSPARENT);
+        }
+    }
+    
+    /**
+     * 设置文本及阴影背景的可见性
+     */
+    public void setTextVisible(boolean visible) {
+        mTextVisible = visible;
+        for (TextView textView : mTextViews) {
+            updateTextViewAppearance(textView);
+        }
+    }
+    
+    /**
+     * 获取文本及阴影背景的可见性
+     */
+    public boolean isTextVisible() {
+        return mTextVisible;
+    }
+    
+    /**
+     * 设置文本及阴影背景的透明度
+     * @param opacity 透明度值（0.0 - 1.0）
+     */
+    public void setTextOpacity(float opacity) {
+        // 确保透明度在0.0到1.0之间
+        mTextOpacity = Math.max(0.0f, Math.min(1.0f, opacity));
+        for (TextView textView : mTextViews) {
+            int alpha = (int) (mTextOpacity * 255);
+            textView.setBackgroundColor(Color.argb(alpha, 0, 0, 0));
+        }
+    }
+    
+    /**
+     * 获取文本及阴影背景的透明度
+     */
+    public float getTextOpacity() {
+        return mTextOpacity;
     }
 }
