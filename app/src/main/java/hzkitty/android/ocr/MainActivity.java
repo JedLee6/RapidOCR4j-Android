@@ -40,7 +40,12 @@ public class MainActivity extends AppCompatActivity {
     private RadioGroup rgDetModel;
     private Switch swTextVisible;
     private SeekBar sbTextOpacity;
+    private Switch swMergeText;
     private RapidOCR rapidOCR;
+    
+    // 保存上次的识别结果，用于开关切换时重新处理
+    private Bitmap lastBitmap;
+    private OcrResult lastOcrResult;
     
     private List<OcrModel> modelList;
     private ModelListAdapter modelListAdapter;
@@ -103,6 +108,33 @@ public class MainActivity extends AppCompatActivity {
                 // 停止拖动时不需要特殊处理
             }
         });
+        
+        // 智能合并文本开关的监听器
+        swMergeText.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                // 当开关状态改变时，重新处理当前的OCR结果
+                if (lastBitmap != null && lastOcrResult != null) {
+                    // 重新构建识别结果并显示
+                    String ocrText = lastOcrResult.getStrRes();
+                    if (isChecked) {
+                        ocrText = mergeTextSmartly(ocrText);
+                    }
+                    
+                    StringBuilder resultBuilder = new StringBuilder();
+                    resultBuilder.append("识别结果：\n")
+                            .append(ocrText)
+                            .append("\n\n")
+                            .append("耗时统计：\n")
+                            .append("总耗时：").append(String.format("%.2f", lastOcrResult.getElapseTime() * 1000)).append("ms\n")
+                            .append("检测耗时：").append(String.format("%.2f", lastOcrResult.getDetTime() * 1000)).append("ms\n")
+                            .append("分类耗时：").append(String.format("%.2f", lastOcrResult.getClsTime() * 1000)).append("ms\n")
+                            .append("识别耗时：").append(String.format("%.2f", lastOcrResult.getRecTime() * 1000)).append("ms");
+                    
+                    tvOcrResult.setText(resultBuilder.toString());
+                }
+            }
+        });
     }
 
     /**
@@ -116,6 +148,7 @@ public class MainActivity extends AppCompatActivity {
         rgDetModel = findViewById(R.id.rg_det_model);
         swTextVisible = findViewById(R.id.sw_text_visible);
         sbTextOpacity = findViewById(R.id.sb_text_opacity);
+        swMergeText = findViewById(R.id.sw_merge_text);
     }
 
     /**
@@ -252,6 +285,51 @@ public class MainActivity extends AppCompatActivity {
         }
     }
     
+    // 智能合并文本的方法
+    private String mergeTextSmartly(String originalText) {
+        if (originalText == null || originalText.isEmpty()) {
+            return originalText;
+        }
+        
+        // 按行分割文本
+        String[] lines = originalText.split("\\n");
+        if (lines.length <= 1) {
+            return originalText;
+        }
+        
+        StringBuilder mergedText = new StringBuilder();
+        
+        // 定义分隔符号集合
+        String[] separators = {"。", "！", "？", "；", ".", "!", "?", ";", "：", ":"};
+        
+        for (int i = 0; i < lines.length; i++) {
+            String currentLine = lines[i].trim();
+            if (currentLine.isEmpty()) {
+                continue;
+            }
+            
+            mergedText.append(currentLine);
+            
+            // 检查当前行是否以分隔符号结尾
+            boolean endsWithSeparator = false;
+            for (String separator : separators) {
+                if (currentLine.endsWith(separator)) {
+                    endsWithSeparator = true;
+                    break;
+                }
+            }
+            
+            // 如果不是最后一行且当前行不以分隔符号结尾，则合并下一行（用空格连接）
+            if (i < lines.length - 1 && !endsWithSeparator) {
+                mergedText.append(" ");
+            } else {
+                mergedText.append("\n");
+            }
+        }
+        
+        return mergedText.toString().trim();
+    }
+    
     // 执行OCR识别
     private void performOCR(Bitmap bitmap) {
         // 显示加载状态
@@ -286,8 +364,15 @@ public class MainActivity extends AppCompatActivity {
 
                         // 构建包含耗时信息的识别结果
                         StringBuilder resultBuilder = new StringBuilder();
+                        String ocrText = finalOcrResult.getStrRes();
+                        
+                        // 根据开关状态决定是否智能合并文本
+                        if (swMergeText.isChecked()) {
+                            ocrText = mergeTextSmartly(ocrText);
+                        }
+                        
                         resultBuilder.append("识别结果：\n")
-                                .append(finalOcrResult.getStrRes())
+                                .append(ocrText)
                                 .append("\n\n")
                                 .append("耗时统计：\n")
                                 .append("总耗时：").append(String.format("%.2f", finalOcrResult.getElapseTime() * 1000)).append("ms\n")
@@ -300,6 +385,10 @@ public class MainActivity extends AppCompatActivity {
                         
                         // 将OCR结果传递给OcrImageView，以便在图片上显示文本框和支持文本选择
                         ivSelectedImage.setOcrResults(finalOcrResult.getRecRes());
+                        
+                        // 保存当前的识别结果，用于开关切换时重新处理
+                        lastBitmap = bitmap;
+                        lastOcrResult = finalOcrResult;
                     }
                 } finally {
                     // 恢复按钮状态

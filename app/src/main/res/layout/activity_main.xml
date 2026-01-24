@@ -51,8 +51,7 @@
                 <androidx.recyclerview.widget.RecyclerView
                     android:id="@+id/rv_model_list"
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:maxHeight="200dp"
+                    android:layout_height="200dp"
                     android:scrollbars="vertical" />
 
             </LinearLayout>
@@ -185,6 +184,26 @@
                 android:layout_marginBottom="16dp"
                 android:scaleType="centerInside"
                 tools:srcCompat="@tools:sample/avatars" />
+
+            <!-- 智能合并文本开关 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="智能合并文本:"
+                    android:textSize="16sp"
+                    android:layout_marginEnd="16dp" />
+                <Switch
+                    android:id="@+id/sw_merge_text"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:checked="true" />
+            </LinearLayout>
 
             <TextView
                 android:id="@+id/tv_ocr_result"
