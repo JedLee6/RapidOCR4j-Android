@@ -104,12 +104,14 @@ public class OcrImageView extends androidx.appcompat.widget.AppCompatImageView {
         mTextRects.clear();
         mTextList.clear();
         
-        if (results != null && !results.isEmpty()) {
+        if (results != null && !results.isEmpty() && mBitmap != null) {
             mOcrResults.addAll(results);
             
-            // 计算图像的缩放比例
-            float scaleX = (float) getWidth() / mBitmap.getWidth();
-            float scaleY = (float) getHeight() / mBitmap.getHeight();
+            // 获取ImageView的矩阵，该矩阵包含了图像的缩放和位移信息
+            android.graphics.Matrix imageMatrix = getImageMatrix();
+            
+            // 创建一个用于转换坐标的数组
+            float[] points = new float[2];
             
             // 转换OCR结果的坐标到视图坐标系
             for (RecResult result : results) {
@@ -122,10 +124,15 @@ public class OcrImageView extends androidx.appcompat.widget.AppCompatImageView {
                     int bottom = Integer.MIN_VALUE;
                     
                     for (Point point : box) {
-                        left = Math.min(left, (int) (point.x * scaleX));
-                        top = Math.min(top, (int) (point.y * scaleY));
-                        right = Math.max(right, (int) (point.x * scaleX));
-                        bottom = Math.max(bottom, (int) (point.y * scaleY));
+                        // 将原始坐标转换为视图坐标
+                        points[0] = (float) point.x;
+                        points[1] = (float) point.y;
+                        imageMatrix.mapPoints(points);
+                        
+                        left = Math.min(left, (int) points[0]);
+                        top = Math.min(top, (int) points[1]);
+                        right = Math.max(right, (int) points[0]);
+                        bottom = Math.max(bottom, (int) points[1]);
                     }
                     
                     Rect rect = new Rect(left, top, right, bottom);
