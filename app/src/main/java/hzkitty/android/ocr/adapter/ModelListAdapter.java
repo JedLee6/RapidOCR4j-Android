@@ -38,9 +38,14 @@ public class ModelListAdapter extends RecyclerView.Adapter<ModelListAdapter.Mode
     public void onBindViewHolder(@NonNull ModelViewHolder holder, int position) {
         OcrModel model = modelList.get(position);
         holder.tvModelName.setText(model.getName());
+        
+        // 先移除之前的监听器，避免设置状态时触发
+        holder.cbSelect.setOnCheckedChangeListener(null);
+        
+        // 设置正确的选中状态
         holder.cbSelect.setChecked(model.isSelected());
 
-        // 设置CheckBox的勾选状态变化监听
+        // 重新设置勾选状态变化监听
         holder.cbSelect.setOnCheckedChangeListener((buttonView, isChecked) -> {
             model.setSelected(isChecked);
             if (selectListener != null) {
