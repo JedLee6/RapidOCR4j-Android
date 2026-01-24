@@ -71,8 +71,10 @@ public class MainActivity extends AppCompatActivity {
             // 检测模块配置优化
             OcrConfig.DetConfig detConfig = config.getDet();
             detConfig.setModelPath("ch_PP-OCRv5_mobile_det.onnx"); // 使用v5检测模型
-            detConfig.setBoxThresh(0.5f); // 提高检测阈值，减少检测框数量
-            detConfig.setUnclipRatio(1.2f); // 调整文本框膨胀系数
+            detConfig.setBoxThresh(0.3f); // 降低边框阈值，允许更多候选区域合并
+            detConfig.setUnclipRatio(2.0f); // 增大文本框膨胀系数，帮助合并相邻文本框
+            detConfig.setThresh(0.2f); // 降低检测阈值，提高文本区域检测灵敏度
+            //detConfig.setUseDilation(false); // 关闭膨胀操作，减少文本框分割
             
 
             
