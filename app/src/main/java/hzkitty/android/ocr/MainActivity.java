@@ -66,7 +66,8 @@ public class MainActivity extends AppCompatActivity {
             recConfig.setInterOpNumThreads(2); // 设置操作间线程数
             // 使用latin v5识别模型(支持拉丁文字识别)
             // 注意：请先手动下载latin_PP-OCRv5_rec_mobile_infer.onnx模型文件并放入OcrLibrary/src/main/assets目录
-            recConfig.setModelPath("latin_PP-OCRv5_rec_mobile_infer.onnx"); // 使用latin v5识别模型(支持英文、数字、符号等拉丁文字)
+            recConfig.setModelPath("ch_PP-OCRv5_rec_mobile_infer.onnx"); // 使用v5识别模型
+//            recConfig.setModelPath("latin_PP-OCRv5_rec_mobile_infer.onnx"); // 使用latin v5识别模型(支持英文、数字、符号等拉丁文字)
             
             // 检测模块配置优化
             OcrConfig.DetConfig detConfig = config.getDet();
