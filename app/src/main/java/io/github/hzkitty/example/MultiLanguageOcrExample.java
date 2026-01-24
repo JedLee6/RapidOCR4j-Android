@@ -44,6 +44,24 @@ public class MultiLanguageOcrExample extends AppCompatActivity {
             latinRecConfig.setRecImgShape(new int[]{3, 48, 320});
             config.addRecConfig(latinRecConfig);
 
+            // 添加阿拉伯文字识别模型
+            OcrConfig.RecConfig arabicRecConfig = new OcrConfig.RecConfig();
+            arabicRecConfig.setModelPath("arabic_PP-OCRv5_rec_mobile_infer.onnx");
+            arabicRecConfig.setRecImgShape(new int[]{3, 48, 320});
+            config.addRecConfig(arabicRecConfig);
+
+            // 添加斯拉夫文字识别模型
+            OcrConfig.RecConfig eslavRecConfig = new OcrConfig.RecConfig();
+            eslavRecConfig.setModelPath("eslav_PP-OCRv5_rec_mobile_infer.onnx");
+            eslavRecConfig.setRecImgShape(new int[]{3, 48, 320});
+            config.addRecConfig(eslavRecConfig);
+
+            // 添加韩文字识别模型
+            OcrConfig.RecConfig koreanRecConfig = new OcrConfig.RecConfig();
+            koreanRecConfig.setModelPath("korean_PP-OCRv5_rec_mobile_infer.onnx");
+            koreanRecConfig.setRecImgShape(new int[]{3, 48, 320});
+            config.addRecConfig(koreanRecConfig);
+
             // 创建RapidOCR实例
             RapidOCR rapidOCR = RapidOCR.create(this, config);
 
