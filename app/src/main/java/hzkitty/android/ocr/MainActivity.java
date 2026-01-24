@@ -114,6 +114,11 @@ public class MainActivity extends AppCompatActivity {
         modelList.add(new OcrModel("阿拉伯文字识别模型", "arabic_PP-OCRv5_rec_mobile_infer.onnx"));
         modelList.add(new OcrModel("斯拉夫文字识别模型", "eslav_PP-OCRv5_rec_mobile_infer.onnx"));
         modelList.add(new OcrModel("韩文字识别模型", "korean_PP-OCRv5_rec_mobile_infer.onnx"));
+        
+        // 设置只有中文模型默认选中，其他模型默认不选中
+        for (int i = 1; i < modelList.size(); i++) {
+            modelList.get(i).setSelected(false);
+        }
     }
     
     // 初始化模型选择RecyclerView
