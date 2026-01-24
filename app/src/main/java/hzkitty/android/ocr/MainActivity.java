@@ -95,14 +95,45 @@ public class MainActivity extends AppCompatActivity {
 
     // 执行OCR识别
     private void performOCR(Bitmap bitmap) {
-        try {
-            tvOcrResult.setText("正在识别...");
-            OcrResult ocrResult = rapidOCR.run(bitmap);
-            tvOcrResult.setText(ocrResult.getStrRes());
-        } catch (Exception e) {
-            e.printStackTrace();
-            tvOcrResult.setText("识别失败: " + e.getMessage());
-        }
+        // 显示加载状态
+        tvOcrResult.setText("正在识别...");
+        btnSelectImage.setEnabled(false); // 禁用按钮避免重复点击
+        
+        // 创建子线程执行OCR识别
+        new Thread(() -> {
+            OcrResult ocrResult = null;
+            Exception exception = null;
+            
+            try {
+                // 执行OCR识别
+                ocrResult = rapidOCR.run(bitmap);
+            } catch (Exception e) {
+                e.printStackTrace();
+                exception = e;
+            }
+            
+            // 获取最终结果和异常信息
+            final OcrResult finalOcrResult = ocrResult;
+            final Exception finalException = exception;
+            
+            // 在主线程更新UI
+            runOnUiThread(() -> {
+                try {
+                    if (finalException != null) {
+                        // 识别失败
+                        tvOcrResult.setText("识别失败: " + finalException.getMessage());
+                    } else {
+                        // 识别成功
+
+                        // 同时在文本区域显示识别结果
+                        tvOcrResult.setText(finalOcrResult.getStrRes());
+                    }
+                } finally {
+                    // 恢复按钮状态
+                    btnSelectImage.setEnabled(true);
+                }
+            });
+        }).start();
     }
 
 
