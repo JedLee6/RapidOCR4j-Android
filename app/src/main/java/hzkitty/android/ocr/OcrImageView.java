@@ -176,12 +176,20 @@ public class OcrImageView extends RelativeLayout {
         
         // 设置自动调整字体大小（使用兼容方式）
         TextViewCompat.setAutoSizeTextTypeWithDefaults(textView, TextViewCompat.AUTO_SIZE_TEXT_TYPE_UNIFORM);
+        // 调整步长为1SP以获得更精细的字体大小调整
         TextViewCompat.setAutoSizeTextTypeUniformWithConfiguration(
                 textView, 
                 5, // 最小字体大小
-                50, // 最大字体大小
-                1, // 步长
-                2); // SP单位常量值
+                250, // 最大字体大小
+                1, // 步长值（1SP）
+                //unit参数的枚举值：
+                //TypedValue.COMPLEX_UNIT_PX = 0（像素）
+                //TypedValue.COMPLEX_UNIT_DIP = 1（设备独立像素dp）
+                //TypedValue.COMPLEX_UNIT_SP = 2（缩放像素sp，推荐用于字体）
+                //TypedValue.COMPLEX_UNIT_PT = 3（点）
+                //TypedValue.COMPLEX_UNIT_IN = 4（英寸）
+                //TypedValue.COMPLEX_UNIT_MM = 5（毫米）
+                0); // 步长单位：SP (TypedValue.COMPLEX_UNIT_SP = 2)
         
         // 设置TextView的位置和大小
         FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
