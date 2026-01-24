@@ -17,6 +17,10 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.stream.Collectors;
 
 import io.github.hzkitty.cal_rec_boxes.CalRecBoxes;
@@ -49,9 +53,11 @@ public class RapidOCR {
     // OCR 三大模块和一个辅助工具
     private final TextDetector textDet;
     private final TextClassifier textCls;
-    private final TextRecognizer textRec;
+    private final TextRecognizer textRec; // 默认识别器
+    private final List<TextRecognizer> multiTextRecs; // 多语言识别器列表
     private final CalRecBoxes calRecBoxes;
     private final LoadImage loadImage;
+    private final ExecutorService executorService; // 线程池用于并行识别
 
 
     public static RapidOCR create(Context context) {
@@ -88,6 +94,18 @@ public class RapidOCR {
 
         this.useRec = globalConfig.isUseRec();
         this.textRec = new TextRecognizer(context, config.getRec());
+
+        // 初始化多语言识别器列表
+        this.multiTextRecs = new ArrayList<>();
+        if (config.getMultiRecConfigs() != null && !config.getMultiRecConfigs().isEmpty()) {
+            for (OcrConfig.RecConfig recConfig : config.getMultiRecConfigs()) {
+                this.multiTextRecs.add(new TextRecognizer(context, recConfig));
+            }
+        }
+
+        // 初始化线程池，线程数为识别器总数
+        int threadCount = 1 + this.multiTextRecs.size();
+        this.executorService = Executors.newFixedThreadPool(threadCount);
 
         this.loadImage = new LoadImage();
         this.maxSideLen = globalConfig.getMaxSideLen();
@@ -220,10 +238,46 @@ public class RapidOCR {
 
         // ========== 3、识别阶段 ==========
         if (realUseRec) {
-            // 是否返回单词级别的框
-            Pair<List<TupleResult>, Double> resultBundle = textRec.call(imgList, returnWordBox);
-            recRes = resultBundle.getLeft();
-            recElapsed = resultBundle.getRight();
+            if (multiTextRecs.isEmpty()) {
+                // 单模型识别
+                Pair<List<TupleResult>, Double> resultBundle = textRec.call(imgList, returnWordBox);
+                recRes = resultBundle.getLeft();
+                recElapsed = resultBundle.getRight();
+            } else {
+                // 多模型并行识别
+                List<TextRecognizer> allRecs = new ArrayList<>();
+                allRecs.add(textRec);
+                allRecs.addAll(multiTextRecs);
+                
+                // 使用线程池并行调用所有识别器
+                List<Future<Pair<List<TupleResult>, Double>>> futures = new ArrayList<>();
+                final List<Mat> finalImgList = imgList;
+                final boolean finalReturnWordBox = returnWordBox;
+                for (TextRecognizer recognizer : allRecs) {
+                    final TextRecognizer finalRecognizer = recognizer;
+                    Callable<Pair<List<TupleResult>, Double>> task = () -> {
+                        return finalRecognizer.call(finalImgList, finalReturnWordBox);
+                    };
+                    futures.add(executorService.submit(task));
+                }
+                
+                // 收集所有识别结果
+                List<List<TupleResult>> allResults = new ArrayList<>();
+                double totalRecElapsed = 0.0;
+                for (Future<Pair<List<TupleResult>, Double>> future : futures) {
+                    try {
+                        Pair<List<TupleResult>, Double> resultBundle = future.get();
+                        allResults.add(resultBundle.getLeft());
+                        totalRecElapsed += resultBundle.getRight();
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
+                
+                // 合并识别结果，对每个文本框选择置信度最高的识别结果
+                recRes = mergeRecResults(allResults);
+                recElapsed = totalRecElapsed / allRecs.size(); // 平均耗时
+            }
         }
 
         // ========== 后处理：计算 word-level boxes（可选） ==========
@@ -583,6 +637,40 @@ public class RapidOCR {
 
         // 4. 返回修正后的坐标（dtBoxes 已经就地修改）
         return dtBoxes;
+    }
+
+    /**
+     * 合并多个识别器的识别结果，对每个文本框选择置信度最高的识别结果
+     * @param allResults 所有识别器的识别结果列表
+     * @return 合并后的识别结果列表
+     */
+    private List<TupleResult> mergeRecResults(List<List<TupleResult>> allResults) {
+        if (allResults.isEmpty()) {
+            return Collections.emptyList();
+        }
+        
+        int numBoxes = allResults.get(0).size();
+        List<TupleResult> mergedResults = new ArrayList<>();
+        
+        for (int i = 0; i < numBoxes; i++) {
+            TupleResult bestResult = null;
+            float bestConfidence = 0.0f;
+            
+            // 遍历所有识别器对当前文本框的识别结果
+            for (List<TupleResult> results : allResults) {
+                if (i < results.size()) {
+                    TupleResult result = results.get(i);
+                    if (result.getConfidence() > bestConfidence) {
+                        bestConfidence = result.getConfidence();
+                        bestResult = result;
+                    }
+                }
+            }
+            
+            mergedResults.add(bestResult);
+        }
+        
+        return mergedResults;
     }
 
 }

@@ -1,11 +1,15 @@
 package io.github.hzkitty.entity;
 
+import java.util.ArrayList;
+import java.util.List;
+
 // OCR 主配置类
 public class OcrConfig {
     public GlobalConfig Global = new GlobalConfig(); // 全局配置
     public DetConfig Det = new DetConfig(); // 检测模块配置
     public ClsConfig Cls = new ClsConfig(); // 分类模块配置
     public RecConfig Rec = new RecConfig(); // 识别模块配置
+    public List<RecConfig> MultiRecConfigs = new ArrayList<>(); // 多语言识别模块配置列表
 
     public GlobalConfig getGlobal() {
         return Global;
@@ -37,6 +41,18 @@ public class OcrConfig {
 
     public void setRec(RecConfig rec) {
         Rec = rec;
+    }
+
+    public List<RecConfig> getMultiRecConfigs() {
+        return MultiRecConfigs;
+    }
+
+    public void setMultiRecConfigs(List<RecConfig> multiRecConfigs) {
+        MultiRecConfigs = multiRecConfigs;
+    }
+
+    public void addRecConfig(RecConfig recConfig) {
+        MultiRecConfigs.add(recConfig);
     }
 
     // 全局配置类
