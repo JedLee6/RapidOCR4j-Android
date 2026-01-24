@@ -56,14 +56,14 @@ public class OcrImageView extends androidx.appcompat.widget.AppCompatImageView {
     private void init() {
         // 初始化画笔
         mRectPaint = new Paint();
-        mRectPaint.setColor(Color.RED);
-        mRectPaint.setStyle(Paint.Style.STROKE);
-        mRectPaint.setStrokeWidth(2f);
+        mRectPaint.setColor(Color.argb(128, 0, 0, 0)); // 设置半透明黑色背景
+        mRectPaint.setStyle(Paint.Style.FILL); // 填充样式，替换原来的描边
         
         mTextPaint = new Paint();
         mTextPaint.setColor(Color.WHITE);
         mTextPaint.setTextSize(16f);
-        mTextPaint.setShadowLayer(2f, 0f, 0f, Color.BLACK);
+        mTextPaint.setShadowLayer(2f, 1f, 1f, Color.BLACK); // 增强文字阴影效果
+        mTextPaint.setAntiAlias(true); // 开启抗锯齿，使文字更清晰
         
         mSelectedPaint = new Paint();
         mSelectedPaint.setColor(Color.argb(128, 0, 255, 255));
@@ -168,10 +168,10 @@ public class OcrImageView extends androidx.appcompat.widget.AppCompatImageView {
             // 如果是选中的文本框，绘制选中效果
             if (i == mSelectedIndex) {
                 canvas.drawRect(rect, mSelectedPaint);
+            } else {
+                // 绘制半透明背景，替换原来的红框
+                canvas.drawRect(rect, mRectPaint);
             }
-            
-            // 绘制文本框边框
-            canvas.drawRect(rect, mRectPaint);
             
             // 绘制文本内容（自动调整字体大小）
             String text = mTextList.get(i);
