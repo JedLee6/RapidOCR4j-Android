@@ -15,7 +15,6 @@ import android.os.Environment;
 import android.provider.MediaStore;
 import android.view.View;
 import android.widget.Button;
-import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -34,7 +33,7 @@ public class MainActivity extends AppCompatActivity {
     private static final int REQUEST_PERMISSIONS = 2;
 
     private Button btnSelectImage;
-    private ImageView ivSelectedImage;
+    private OcrImageView ivSelectedImage;
     private TextView tvOcrResult;
     private RapidOCR rapidOCR;
 
@@ -166,6 +165,9 @@ public class MainActivity extends AppCompatActivity {
                         
                         // 在文本区域显示识别结果和耗时信息
                         tvOcrResult.setText(resultBuilder.toString());
+                        
+                        // 将OCR结果传递给OcrImageView，以便在图片上显示文本框和支持文本选择
+                        ivSelectedImage.setOcrResults(finalOcrResult.getRecRes());
                     }
                 } finally {
                     // 恢复按钮状态

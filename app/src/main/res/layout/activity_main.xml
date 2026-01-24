@@ -32,7 +32,7 @@
             android:layout_height="wrap_content"
             android:orientation="vertical">
 
-            <ImageView
+            <hzkitty.android.ocr.OcrImageView
                 android:id="@+id/iv_selected_image"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
