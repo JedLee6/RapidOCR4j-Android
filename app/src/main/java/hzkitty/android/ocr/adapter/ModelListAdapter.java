@@ -40,10 +40,21 @@ public class ModelListAdapter extends RecyclerView.Adapter<ModelListAdapter.Mode
         holder.tvModelName.setText(model.getName());
         holder.cbSelect.setChecked(model.isSelected());
 
+        // 设置CheckBox的勾选状态变化监听
         holder.cbSelect.setOnCheckedChangeListener((buttonView, isChecked) -> {
             model.setSelected(isChecked);
             if (selectListener != null) {
                 selectListener.onModelSelect(model, isChecked);
+            }
+        });
+        
+        // 为整个itemView添加点击事件，点击时切换CheckBox的勾选状态
+        holder.itemView.setOnClickListener(v -> {
+            boolean newState = !model.isSelected();
+            model.setSelected(newState);
+            holder.cbSelect.setChecked(newState);
+            if (selectListener != null) {
+                selectListener.onModelSelect(model, newState);
             }
         });
     }
