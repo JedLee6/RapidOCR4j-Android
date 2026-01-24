@@ -173,10 +173,47 @@ public class OcrImageView extends androidx.appcompat.widget.AppCompatImageView {
             // 绘制文本框边框
             canvas.drawRect(rect, mRectPaint);
             
-            // 绘制文本内容（可选）
+            // 绘制文本内容（自动调整字体大小）
             String text = mTextList.get(i);
-            canvas.drawText(text, rect.left + 5, rect.top + 20, mTextPaint);
+            if (!text.isEmpty()) {
+                // 计算合适的字体大小
+                float textSize = calculateOptimalFontSize(text, rect, mTextPaint);
+                mTextPaint.setTextSize(textSize);
+                
+                // 绘制文本
+                canvas.drawText(text, rect.left + 5, rect.top + textSize - 5, mTextPaint);
+            }
         }
+    }
+    
+    /**
+     * 计算文本在指定矩形内的最佳字体大小
+     * @param text 要绘制的文本
+     * @param rect 文本框矩形
+     * @param paint 绘制文本的画笔
+     * @return 最佳字体大小
+     */
+    private float calculateOptimalFontSize(String text, Rect rect, Paint paint) {
+        // 计算文本框的可用宽度和高度
+        float availableWidth = rect.width() - 10; // 左右各留5像素边距
+        float availableHeight = rect.height() - 10; // 上下各留5像素边距
+        
+        // 初始字体大小设置为文本框高度
+        float fontSize = availableHeight;
+        paint.setTextSize(fontSize);
+        
+        // 测量文本宽度
+        float textWidth = paint.measureText(text);
+        
+        // 如果文本宽度超过可用宽度，逐渐减小字体大小
+        while (textWidth > availableWidth && fontSize > 5) {
+            fontSize -= 1;
+            paint.setTextSize(fontSize);
+            textWidth = paint.measureText(text);
+        }
+        
+        // 确保字体大小不小于最小值
+        return Math.max(fontSize, 5);
     }
     
     /**
