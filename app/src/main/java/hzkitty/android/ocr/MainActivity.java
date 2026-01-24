@@ -6,8 +6,10 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import android.content.Intent;
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Environment;
 import android.provider.MediaStore;
 import android.view.View;
 import android.widget.Button;
@@ -17,6 +19,11 @@ import android.widget.SeekBar;
 import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
+
+import java.io.File;
+import java.io.IOException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -34,8 +41,14 @@ import io.github.hzkitty.entity.OcrConfig;
 public class MainActivity extends AppCompatActivity {
 
     private static final int REQUEST_IMAGE_PICK = 1;
+    private static final int REQUEST_IMAGE_CAPTURE = 2;
+    private static final int REQUEST_CAMERA_PERMISSION = 100;
+    
+    // 用于保存拍照后的图片路径
+    private String currentPhotoPath;
 
     private Button btnSelectImage;
+    private Button btnTakePhoto;
     private OcrImageView ivSelectedImage;
     private TextView tvOcrResult;
     private RecyclerView rvModelList;
@@ -73,6 +86,14 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onClick(View v) {
                 selectImage();
+            }
+        });
+
+        // 设置拍照按钮点击事件
+        btnTakePhoto.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                takePhoto();
             }
         });
 
@@ -152,6 +173,7 @@ public class MainActivity extends AppCompatActivity {
      */
     private void initUI() {
         btnSelectImage = findViewById(R.id.btn_select_image);
+        btnTakePhoto = findViewById(R.id.btn_take_photo);
         ivSelectedImage = findViewById(R.id.iv_selected_image);
         tvOcrResult = findViewById(R.id.tv_ocr_result);
         rvModelList = findViewById(R.id.rv_model_list);
@@ -202,6 +224,64 @@ public class MainActivity extends AppCompatActivity {
         startActivityForResult(intent, REQUEST_IMAGE_PICK);
     }
 
+    // 拍照
+    private void takePhoto() {
+        if (checkSelfPermission(android.Manifest.permission.CAMERA) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{android.Manifest.permission.CAMERA}, REQUEST_CAMERA_PERMISSION);
+        } else {
+            dispatchTakePictureIntent();
+        }
+    }
+    
+    // 启动相机应用并保存原始图片
+    private void dispatchTakePictureIntent() {
+        Intent takePictureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+        // 确保有相机应用可以处理这个意图
+        if (takePictureIntent.resolveActivity(getPackageManager()) != null) {
+            // 创建一个文件来保存图片
+            File photoFile = null;
+            try {
+                photoFile = createImageFile();
+            } catch (IOException ex) {
+                // 处理异常
+                ex.printStackTrace();
+                Toast.makeText(this, "创建图片文件失败", Toast.LENGTH_SHORT).show();
+            }
+            // 如果文件创建成功，继续处理
+            if (photoFile != null) {
+                // 使用FileProvider创建URI，解决FileUriExposedException
+                Uri photoURI = androidx.core.content.FileProvider.getUriForFile(
+                        this,
+                        getPackageName() + ".fileprovider",
+                        photoFile);
+                takePictureIntent.putExtra(MediaStore.EXTRA_OUTPUT, photoURI);
+                // 授予临时权限
+                takePictureIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                takePictureIntent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+                startActivityForResult(takePictureIntent, REQUEST_IMAGE_CAPTURE);
+            }
+        } else {
+            Toast.makeText(this, "没有可用的相机应用", Toast.LENGTH_SHORT).show();
+        }
+    }
+    
+    // 创建一个临时图片文件
+    private File createImageFile() throws IOException {
+        // 创建一个唯一的文件名
+        String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+        String imageFileName = "JPEG_" + timeStamp + "_";
+        File storageDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES);
+        File image = File.createTempFile(
+                imageFileName,  /* 前缀 */
+                ".jpg",         /* 后缀 */
+                storageDir      /* 目录 */
+        );
+        
+        // 保存文件路径
+        currentPhotoPath = image.getAbsolutePath();
+        return image;
+    }
+
     // 处理图片选择结果
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
@@ -219,6 +299,39 @@ public class MainActivity extends AppCompatActivity {
             } catch (IOException e) {
                 e.printStackTrace();
                 Toast.makeText(this, "图片加载失败", Toast.LENGTH_SHORT).show();
+            }
+        } else if (requestCode == REQUEST_IMAGE_CAPTURE && resultCode == RESULT_OK) {
+            // 从文件中加载高分辨率图片
+            try {
+                // 设置BitmapFactory选项以加载原始分辨率图片
+                BitmapFactory.Options options = new BitmapFactory.Options();
+                options.inPreferredConfig = Bitmap.Config.ARGB_8888; // 使用高质量配置
+                options.inScaled = false; // 不进行缩放
+                options.inDither = true; // 启用抖动以提高质量
+                
+                Bitmap bitmap = BitmapFactory.decodeFile(currentPhotoPath, options);
+                if (bitmap != null) {
+                    ivSelectedImage.setImageBitmap(bitmap);
+                    performOCR(bitmap);
+                } else {
+                    Toast.makeText(this, "加载图片失败", Toast.LENGTH_SHORT).show();
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+                Toast.makeText(this, "处理图片失败", Toast.LENGTH_SHORT).show();
+            }
+        }
+    }
+
+    // 处理权限请求结果
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQUEST_CAMERA_PERMISSION) {
+            if (grantResults.length > 0 && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                takePhoto();
+            } else {
+                Toast.makeText(this, "需要相机权限才能拍照", Toast.LENGTH_SHORT).show();
             }
         }
     }

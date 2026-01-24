@@ -62,7 +62,8 @@ public class OcrImageView extends RelativeLayout {
         mImageView.setScaleType(ImageView.ScaleType.FIT_CENTER);
         mImageView.setLayoutParams(new RelativeLayout.LayoutParams(
                 RelativeLayout.LayoutParams.MATCH_PARENT,
-                RelativeLayout.LayoutParams.MATCH_PARENT));
+                RelativeLayout.LayoutParams.WRAP_CONTENT));
+        mImageView.setAdjustViewBounds(true);
         
         // 设置文本容器参数
         mTextContainer.setLayoutParams(new RelativeLayout.LayoutParams(
@@ -108,12 +109,14 @@ public class OcrImageView extends RelativeLayout {
             int imageWidth = mBitmap.getWidth();
             int imageHeight = mBitmap.getHeight();
             
-            // 计算图片在ImageView中的实际显示区域
+            // 计算图片的缩放比例（FIT_CENTER模式）
             float scale = Math.min((float) viewWidth / imageWidth, (float) viewHeight / imageHeight);
-            float scaledWidth = imageWidth * scale;
-            float scaledHeight = imageHeight * scale;
-            float offsetX = (viewWidth - scaledWidth) / 2;
-            float offsetY = (viewHeight - scaledHeight) / 2;
+            // 计算图片在ImageView中的实际尺寸
+            int scaledImageWidth = Math.round(imageWidth * scale);
+            int scaledImageHeight = Math.round(imageHeight * scale);
+            // 计算图片在ImageView中的偏移量
+            int offsetX = (viewWidth - scaledImageWidth) / 2;
+            int offsetY = (viewHeight - scaledImageHeight) / 2;
             
             // 转换OCR结果的坐标到视图坐标系
             for (RecResult result : results) {
@@ -126,7 +129,7 @@ public class OcrImageView extends RelativeLayout {
                     int bottom = Integer.MIN_VALUE;
                     
                     for (Point point : box) {
-                        // 先将原始坐标缩放，然后添加偏移量
+                        // 应用缩放比例并加上偏移量
                         float scaledX = (float) point.x * scale + offsetX;
                         float scaledY = (float) point.y * scale + offsetY;
                         
