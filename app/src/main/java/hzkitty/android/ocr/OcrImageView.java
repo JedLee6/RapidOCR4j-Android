@@ -24,6 +24,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import io.github.hzkitty.entity.RecResult;
+import androidx.core.widget.TextViewCompat;
 
 public class OcrImageView extends RelativeLayout {
     private ImageView mImageView;
@@ -154,7 +155,8 @@ public class OcrImageView extends RelativeLayout {
      * 创建用于显示识别文本的TextView
      */
     private TextView createTextView(String text, Rect rect) {
-        TextView textView = new TextView(getContext());
+        // 使用AppCompatTextView以确保在所有版本上都支持自动调整字体大小
+        androidx.appcompat.widget.AppCompatTextView textView = new androidx.appcompat.widget.AppCompatTextView(getContext());
         
         // 设置文本内容
         textView.setText(text);
@@ -172,10 +174,14 @@ public class OcrImageView extends RelativeLayout {
         textView.setFocusable(true);
         textView.setFocusableInTouchMode(true);
         
-        // 计算合适的字体大小
-        textView.setTextSize(16); // 初始字体大小
-        float textSize = calculateOptimalFontSize(text, rect, textView.getPaint());
-        textView.setTextSize(pxToSp(getContext(), textSize));
+        // 设置自动调整字体大小（使用兼容方式）
+        TextViewCompat.setAutoSizeTextTypeWithDefaults(textView, TextViewCompat.AUTO_SIZE_TEXT_TYPE_UNIFORM);
+        TextViewCompat.setAutoSizeTextTypeUniformWithConfiguration(
+                textView, 
+                5, // 最小字体大小
+                50, // 最大字体大小
+                1, // 步长
+                2); // SP单位常量值
         
         // 设置TextView的位置和大小
         FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
