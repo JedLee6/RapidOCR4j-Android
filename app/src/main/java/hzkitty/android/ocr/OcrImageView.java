@@ -13,7 +13,10 @@ import org.opencv.core.Point;
 import android.graphics.Rect;
 import android.util.AttributeSet;
 import android.util.TypedValue;
+import android.view.ActionMode;
 import android.view.GestureDetector;
+import android.view.Menu;
+import android.view.MenuItem;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewConfiguration;
@@ -55,6 +58,7 @@ public class OcrImageView extends RelativeLayout {
     private float lastTouchX = 0;
     private float lastTouchY = 0;
     private static final float MARKER_RADIUS = 20; // marker的半径，用于检测触摸
+    private boolean mShowTextSelectionUI = false; // 控制是否显示文本选择UI
     
     public OcrImageView(Context context) {
         super(context);
@@ -132,6 +136,13 @@ public class OcrImageView extends RelativeLayout {
                     case MotionEvent.ACTION_DOWN:
                         lastTouchX = event.getX();
                         lastTouchY = event.getY();
+                        
+                        // 如果当前显示了文本选择UI，点击任意区域都隐藏它
+                        if (mShowTextSelectionUI) {
+                            hideTextSelectionUI();
+                            return true;
+                        }
+                        
                         // 默认允许父视图拦截触摸事件，这样RecyclerView可以处理滑动
                         getParent().requestDisallowInterceptTouchEvent(false);
                         break;
@@ -177,9 +188,17 @@ public class OcrImageView extends RelativeLayout {
                             mEndCursorPoint.x = touchX;
                             mEndCursorPoint.y = touchY;
                             updateSelectionOnMove();
+                            
+                            // 合并选择的文本
+                            String selectedText = mergeSelectedText();
+                            if (!selectedText.isEmpty()) {
+                                // 显示系统文本选择框
+                                showSystemTextSelectionMenu(selectedText, touchX, touchY);
+                                mShowTextSelectionUI = true;
+                            }
+                            
                             // 允许父视图重新拦截触摸事件
                             getParent().requestDisallowInterceptTouchEvent(false);
-                            // 不设置mTextSelectionInProgress = false，让marker选择框保持可见
                         }
                         break;
                     
@@ -191,7 +210,6 @@ public class OcrImageView extends RelativeLayout {
                             updateSelectionOnMove();
                             // 允许父视图重新拦截触摸事件
                             getParent().requestDisallowInterceptTouchEvent(false);
-                            // 不设置mTextSelectionInProgress = false，让marker选择框保持可见
                         }
                         break;
                 }
@@ -547,18 +565,76 @@ public class OcrImageView extends RelativeLayout {
     private void updateSelectionUI() {
         // 重新绘制视图
         invalidate();
-        
-        // 获取选中的文本
-        List<String> selectedText = new ArrayList<>();
+    }
+    
+    /**
+     * 合并所有选中的文本
+     */
+    private String mergeSelectedText() {
+        StringBuilder sb = new StringBuilder();
         for (OcrWordModel wordModel : mSelectedWordModels) {
-            selectedText.add(wordModel.getText());
+            if (sb.length() > 0) {
+                sb.append(" ");
+            }
+            sb.append(wordModel.getText());
         }
-        
-        // 可以在这里将选中的文本传递给外部，例如通过回调接口
-        if (selectedText.size() > 0) {
-            String combinedText = String.join(" ", selectedText);
-            Toast.makeText(getContext(), "选中的文本: " + combinedText, Toast.LENGTH_SHORT).show();
-        }
+        return sb.toString();
+    }
+    
+    /**
+     * 显示系统文本选择菜单
+     */
+    private void showSystemTextSelectionMenu(String text, float x, float y) {
+        // 直接启动ActionMode来显示文本选择菜单
+        startActionMode(new android.view.ActionMode.Callback() {
+            @Override
+            public boolean onCreateActionMode(android.view.ActionMode mode, android.view.Menu menu) {
+                // 手动添加复制菜单项
+                menu.add(Menu.NONE, android.R.id.copy, Menu.NONE, "复制");
+                return true;
+            }
+            
+            @Override
+            public boolean onPrepareActionMode(android.view.ActionMode mode, android.view.Menu menu) {
+                return false;
+            }
+            
+            @Override
+            public boolean onActionItemClicked(android.view.ActionMode mode, android.view.MenuItem item) {
+                // 处理菜单项点击事件
+                if (item.getItemId() == android.R.id.copy) {
+                    // 复制文本到剪贴板
+                    android.content.ClipboardManager clipboard = (android.content.ClipboardManager) getContext().getSystemService(Context.CLIPBOARD_SERVICE);
+                    android.content.ClipData clip = android.content.ClipData.newPlainText("Selected Text", text);
+                    clipboard.setPrimaryClip(clip);
+                    
+                    // 显示复制成功提示
+                    Toast.makeText(getContext(), "文本已复制", Toast.LENGTH_SHORT).show();
+                    
+                    // 隐藏文本选择UI
+                    hideTextSelectionUI();
+                    mode.finish();
+                    return true;
+                }
+                return false;
+            }
+            
+            @Override
+            public void onDestroyActionMode(android.view.ActionMode mode) {
+                // 当菜单销毁时，隐藏文本选择UI
+                hideTextSelectionUI();
+            }
+        });
+    }
+    
+    /**
+     * 隐藏文本选择UI
+     */
+    private void hideTextSelectionUI() {
+        mTextSelectionInProgress = false;
+        mShowTextSelectionUI = false;
+        mSelectedWordModels.clear();
+        invalidate();
     }
     
     @Override
