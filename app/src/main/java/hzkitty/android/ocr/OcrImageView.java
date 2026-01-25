@@ -5,11 +5,15 @@ import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.DashPathEffect;
 import android.graphics.Paint;
 import android.graphics.Path;
+import android.graphics.PointF;
 import org.opencv.core.Point;
 import android.graphics.Rect;
 import android.util.AttributeSet;
+import android.util.TypedValue;
+import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewConfiguration;
@@ -21,6 +25,8 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 
 import io.github.hzkitty.entity.RecResult;
@@ -37,6 +43,18 @@ public class OcrImageView extends RelativeLayout {
     
     private boolean mTextVisible = true; // 文本及阴影背景的可见性
     private float mTextOpacity = 0.5f; // 文本及阴影背景的透明度 (0.0 - 1.0)
+    
+    // 长按文本选择相关变量
+    private GestureDetector mGestureDetector;
+    private List<OcrWordModel> mOcrWordModels = new ArrayList<>();
+    private List<OcrWordModel> mSelectedWordModels = new ArrayList<>();
+    private boolean mLongPressMode = false;
+    private PointF mStartCursorPoint = new PointF();
+    private PointF mEndCursorPoint = new PointF();
+    private boolean mTextSelectionInProgress = false;
+    private float lastTouchX = 0;
+    private float lastTouchY = 0;
+    private static final float MARKER_RADIUS = 20; // marker的半径，用于检测触摸
     
     public OcrImageView(Context context) {
         super(context);
@@ -71,10 +89,16 @@ public class OcrImageView extends RelativeLayout {
                 RelativeLayout.LayoutParams.MATCH_PARENT));
         mTextContainer.setClipChildren(false);
         mTextContainer.setClipToPadding(false);
+        mTextContainer.setClickable(false); // 确保文本容器不拦截触摸事件
+        mTextContainer.setLongClickable(false);
         
         // 将子视图添加到容器中
         addView(mImageView);
         addView(mTextContainer);
+        
+        // 设置OcrImageView为可点击和可长按，确保能接收触摸事件
+        setClickable(true);
+        setLongClickable(true);
         
         // 初始化调试画笔（可选）
         mDebugPaint = new Paint();
@@ -84,6 +108,88 @@ public class OcrImageView extends RelativeLayout {
         // 初始化变量
         mOcrResults = new ArrayList<>();
         mTextViews = new ArrayList<>();
+        mOcrWordModels = new ArrayList<>();
+        mSelectedWordModels = new ArrayList<>();
+        
+        // 初始化手势检测器
+        initGestureDetector();
+    }
+    
+    /**
+     * 初始化手势检测器，用于检测长按事件
+     */
+    private void initGestureDetector() {
+        mGestureDetector = new GestureDetector(getContext(), new GestureDetector.SimpleOnGestureListener() {
+            @Override
+            public void onLongPress(MotionEvent e) {
+                int touchX = (int) e.getX();
+                int touchY = (int) e.getY();
+                
+                // 清除之前的选择
+                mSelectedWordModels.clear();
+                
+                // 长按模式下选择单词
+                selectWordOnTouch(touchX, touchY, true);
+            }
+        });
+        
+        // 设置触摸监听器
+        setOnTouchListener(new OnTouchListener() {
+            @Override
+            public boolean onTouch(View v, MotionEvent event) {
+                if (event.getAction() == MotionEvent.ACTION_DOWN) {
+                    lastTouchX = event.getX();
+                    lastTouchY = event.getY();
+                }
+                
+                // 将触摸事件传递给手势检测器
+                if (mGestureDetector.onTouchEvent(event)) {
+                    return true;
+                }
+                
+                int touchX = (int) event.getX();
+                int touchY = (int) event.getY();
+                
+                // 处理选择器的拖拽
+                if (mTextSelectionInProgress) {
+                    switch (event.getAction()) {
+                        case MotionEvent.ACTION_MOVE:
+                            // 检查是否拖拽的是开始marker
+                            if (isMarkerTouched(mStartCursorPoint, touchX, touchY)) {
+                                mStartCursorPoint.x = touchX;
+                                mStartCursorPoint.y = touchY;
+                                updateSelectionOnMove();
+                                return true;
+                            }
+                            // 检查是否拖拽的是结束marker
+                            else if (isMarkerTouched(mEndCursorPoint, touchX, touchY)) {
+                                mEndCursorPoint.x = touchX;
+                                mEndCursorPoint.y = touchY;
+                                updateSelectionOnMove();
+                                return true;
+                            }
+                            // 否则移动整个选择区域
+                            else {
+                                float deltaX = touchX - lastTouchX;
+                                float deltaY = touchY - lastTouchY;
+                                mStartCursorPoint.x += deltaX;
+                                mStartCursorPoint.y += deltaY;
+                                mEndCursorPoint.x += deltaX;
+                                mEndCursorPoint.y += deltaY;
+                                updateSelectionOnMove();
+                                lastTouchX = touchX;
+                                lastTouchY = touchY;
+                                return true;
+                            }
+                        case MotionEvent.ACTION_UP:
+                            mTextSelectionInProgress = false;
+                            break;
+                    }
+                }
+                
+                return false;
+            }
+        });
     }
     
     public void setImageBitmap(Bitmap bitmap) {
@@ -141,8 +247,15 @@ public class OcrImageView extends RelativeLayout {
                     
                     // 创建TextView显示识别的文本
                     TextView textView = createTextView(result.getText(), new Rect(left, top, right, bottom));
+                    // 设置TextView为不可点击和不可长按，确保触摸事件能传递给OcrImageView
+                    textView.setClickable(false);
+                    textView.setLongClickable(false);
                     mTextViews.add(textView);
                     mTextContainer.addView(textView);
+                    
+                    // 创建OcrWordModel对象，用于文本选择
+                    OcrWordModel wordModel = new OcrWordModel(result.getText(), new Rect(left, top, right, bottom));
+                    mOcrWordModels.add(wordModel);
                 }
             }
         }
@@ -155,6 +268,8 @@ public class OcrImageView extends RelativeLayout {
         mOcrResults.clear();
         mTextViews.clear();
         mTextContainer.removeAllViews();
+        mOcrWordModels.clear();
+        mSelectedWordModels.clear();
     }
     
     /**
@@ -286,6 +401,211 @@ public class OcrImageView extends RelativeLayout {
             textView.setShadowLayer(2f, 1f, 1f, Color.BLACK);
         } else {
             textView.setShadowLayer(0f, 0f, 0f, Color.TRANSPARENT);
+        }
+    }
+    
+    /**
+     * 在触摸位置选择单词
+     */
+    private void selectWordOnTouch(int touchX, int touchY, boolean longPressMode) {
+        mLongPressMode = longPressMode;
+        mTextSelectionInProgress = true;
+        
+        boolean foundWord = false;
+        
+        // 遍历所有单词模型，查找包含触摸点的单词
+        for (OcrWordModel wordModel : mOcrWordModels) {
+            Rect rect = wordModel.getRect();
+            
+            // 检查触摸点是否在单词矩形内
+            if (rect.contains(touchX, touchY)) {
+                foundWord = true;
+                
+                // 清除之前的选择
+                mSelectedWordModels.clear();
+                
+                // 添加选中的单词
+                mSelectedWordModels.add(wordModel);
+                
+                // 设置选择器的起始位置
+                if (longPressMode) {
+                    mStartCursorPoint.x = rect.left;
+                    mStartCursorPoint.y = rect.centerY();
+                    mEndCursorPoint.x = rect.right;
+                    mEndCursorPoint.y = rect.centerY();
+                    mTextSelectionInProgress = true;
+                }
+                
+                // 更新UI显示
+                updateSelectionUI();
+                break;
+            }
+        }
+        
+        if (!foundWord && longPressMode) {
+            // 如果长按位置没有单词，设置选择器的起始位置
+            mStartCursorPoint.x = touchX;
+            mStartCursorPoint.y = touchY;
+            mEndCursorPoint.x = touchX + 100;
+            mEndCursorPoint.y = touchY;
+            mTextSelectionInProgress = true;
+            
+            // 更新UI显示
+            updateSelectionUI();
+        }
+    }
+    
+    /**
+     * 检查是否触摸到了marker
+     */
+    private boolean isMarkerTouched(PointF markerPoint, int touchX, int touchY) {
+        float dx = markerPoint.x - touchX;
+        float dy = markerPoint.y - touchY;
+        return Math.sqrt(dx * dx + dy * dy) <= MARKER_RADIUS;
+    }
+    
+    /**
+     * 在移动时更新选择
+     */
+    private void updateSelectionOnMove() {
+        // 清除之前的选择
+        mSelectedWordModels.clear();
+        
+        // 计算选择区域
+        Rect selectionRect = new Rect(
+                Math.min((int) mStartCursorPoint.x, (int) mEndCursorPoint.x),
+                Math.min((int) mStartCursorPoint.y, (int) mEndCursorPoint.y),
+                Math.max((int) mStartCursorPoint.x, (int) mEndCursorPoint.x),
+                Math.max((int) mStartCursorPoint.y, (int) mEndCursorPoint.y)
+        );
+        
+        // 选择所有与选择区域相交的单词
+        for (OcrWordModel wordModel : mOcrWordModels) {
+            Rect wordRect = wordModel.getRect();
+            
+            if (Rect.intersects(selectionRect, wordRect)) {
+                mSelectedWordModels.add(wordModel);
+            }
+        }
+        
+        // 更新UI显示
+        updateSelectionUI();
+    }
+    
+    /**
+     * 更新选择的UI显示
+     */
+    private void updateSelectionUI() {
+        // 重新绘制视图
+        invalidate();
+        
+        // 获取选中的文本
+        List<String> selectedText = new ArrayList<>();
+        for (OcrWordModel wordModel : mSelectedWordModels) {
+            selectedText.add(wordModel.getText());
+        }
+        
+        // 可以在这里将选中的文本传递给外部，例如通过回调接口
+        if (selectedText.size() > 0) {
+            String combinedText = String.join(" ", selectedText);
+            Toast.makeText(getContext(), "选中的文本: " + combinedText, Toast.LENGTH_SHORT).show();
+        }
+    }
+    
+    @Override
+    protected void dispatchDraw(Canvas canvas) {
+        super.dispatchDraw(canvas);
+        
+        // 绘制选中文本的边框
+        if (mSelectedWordModels.size() > 0) {
+            Paint paint = new Paint();
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(2);
+            paint.setPathEffect(new DashPathEffect(new float[]{2, 2}, 0));
+            paint.setColor(Color.RED);
+            paint.setAntiAlias(true);
+            
+            for (OcrWordModel wordModel : mSelectedWordModels) {
+                canvas.drawRect(wordModel.getRect(), paint);
+            }
+        }
+        
+        // 绘制选择器
+        if (mTextSelectionInProgress) {
+            Paint paint = new Paint();
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(2);
+            paint.setColor(Color.BLUE);
+            paint.setAntiAlias(true);
+            
+            // 绘制选择区域
+            Rect selectionRect = new Rect(
+                    Math.min((int) mStartCursorPoint.x, (int) mEndCursorPoint.x),
+                    Math.min((int) mStartCursorPoint.y, (int) mEndCursorPoint.y),
+                    Math.max((int) mStartCursorPoint.x, (int) mEndCursorPoint.x),
+                    Math.max((int) mStartCursorPoint.y, (int) mEndCursorPoint.y)
+            );
+            canvas.drawRect(selectionRect, paint);
+            
+            // 绘制选择器的起点和终点marker
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(Color.BLUE);
+            canvas.drawCircle(mStartCursorPoint.x, mStartCursorPoint.y, MARKER_RADIUS, paint);
+            canvas.drawCircle(mEndCursorPoint.x, mEndCursorPoint.y, MARKER_RADIUS, paint);
+            
+            // 在marker上绘制白色的加号和减号，区分开始和结束
+            paint.setColor(Color.WHITE);
+            paint.setStrokeWidth(3);
+            // 开始marker绘制加号
+            canvas.drawLine(mStartCursorPoint.x - 10, mStartCursorPoint.y, mStartCursorPoint.x + 10, mStartCursorPoint.y, paint);
+            canvas.drawLine(mStartCursorPoint.x, mStartCursorPoint.y - 10, mStartCursorPoint.x, mStartCursorPoint.y + 10, paint);
+            // 结束marker绘制减号
+            canvas.drawLine(mEndCursorPoint.x - 10, mEndCursorPoint.y, mEndCursorPoint.x + 10, mEndCursorPoint.y, paint);
+        }
+    }
+    
+    /**
+     * OcrWordModel类，用于表示识别出的单词及其位置
+     */
+    private class OcrWordModel {
+        private String mText;
+        private Rect mRect;
+        
+        public OcrWordModel(String text, Rect rect) {
+            mText = text;
+            mRect = rect;
+        }
+        
+        public String getText() {
+            return mText;
+        }
+        
+        public Rect getRect() {
+            return mRect;
+        }
+        
+        public int getLeft() {
+            return mRect.left;
+        }
+        
+        public int getTop() {
+            return mRect.top;
+        }
+        
+        public int getRight() {
+            return mRect.right;
+        }
+        
+        public int getBottom() {
+            return mRect.bottom;
+        }
+        
+        public int getWidth() {
+            return mRect.width();
+        }
+        
+        public int getHeight() {
+            return mRect.height();
         }
     }
     

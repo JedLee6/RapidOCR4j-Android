@@ -1,0 +1,1777 @@
+package example.imagetextgrabber.widgets;
+
+/*
+ * Copyright (c) 2019. Nikhil Dubbaka from TechNikh.com under GNU AFFERO GENERAL PUBLIC LICENSE
+ * Copyright and license notices must be preserved.
+ * When a modified version is used to provide a service over a network, the complete source code of the modified version must be made available.
+ */
+
+import static com.technikh.imagetextgrabber.activities.MainActivity.savedRects;
+
+import android.content.Context;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.DashPathEffect;
+import android.graphics.Paint;
+import android.graphics.PointF;
+import android.graphics.PorterDuff;
+import android.graphics.Rect;
+import android.graphics.RectF;
+import android.graphics.drawable.BitmapDrawable;
+import android.os.Build;
+import android.os.Build.VERSION_CODES;
+import android.os.Bundle;
+import android.text.TextUtils;
+import android.util.AttributeSet;
+import android.util.Log;
+import android.view.GestureDetector;
+import android.view.MotionEvent;
+import android.view.ViewTreeObserver;
+import android.widget.EditText;
+import android.widget.ImageView;
+import android.widget.Toast;
+
+import androidx.annotation.NonNull;
+import androidx.appcompat.widget.AppCompatImageView;
+
+import com.bogdwellers.pinchtozoom.ImageMatrixTouchHandler;
+import com.bogdwellers.pinchtozoom.ImageViewerCorrector;
+import com.google.android.gms.tasks.OnFailureListener;
+import com.google.android.gms.tasks.OnSuccessListener;
+import com.google.mlkit.vision.common.InputImage;
+import com.google.mlkit.vision.text.Text;
+import com.google.mlkit.vision.text.TextRecognition;
+import com.google.mlkit.vision.text.TextRecognizer;
+import com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions;
+import com.google.mlkit.vision.text.devanagari.DevanagariTextRecognizerOptions;
+import com.google.mlkit.vision.text.japanese.JapaneseTextRecognizerOptions;
+import com.google.mlkit.vision.text.korean.KoreanTextRecognizerOptions;
+import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
+import com.technikh.imagetextgrabber.R;
+import com.technikh.imagetextgrabber.activities.MainActivity;
+import com.technikh.imagetextgrabber.models.ImageViewSettingsModel;
+import com.technikh.imagetextgrabber.models.VisionWordModel;
+import com.technikh.imagetextgrabber.room.entity.Images;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
+
+public class TouchImageView extends AppCompatImageView {
+
+    private GestureDetector gestureDetector1;
+
+    private com.technikh.imagetextgrabber.room.dao.ImagesDataAccess dao;
+
+    public void highlight(final String s){
+
+        {
+            dao = MainActivity.db.getImagesDao();
+
+            String sCopy=s;
+            if(!sCopy.equals("#00000000")){
+                sCopy="#CC" + sCopy.subSequence(1, sCopy.length());
+            }
+            Paint paint = new Paint();
+            paint.setStyle(Paint.Style.FILL);
+            paint.setStrokeWidth(2);
+            paint.setPathEffect(new DashPathEffect(new float[]{2, 2}, 0));
+            paint.setColor(Color.parseColor(sCopy));
+            paint.setAntiAlias(true);
+
+
+            final Bitmap originalBitmap = unChangedOriginalBitmap.copy(unChangedOriginalBitmap.getConfig(), true);
+
+            Canvas canvas = new Canvas(originalBitmap);
+            canvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.DST_OUT);
+            //Toast.makeText(getContext().getApplicationContext(),selectedVisionTextRectanglesSimplified.size()+"",Toast.LENGTH_LONG).show();
+            for (VisionWordModel visionWordModel : selectedVisionTextRectanglesSimplified) {
+                //Toast.makeText(getContext().getApplicationContext(),"in",Toast.LENGTH_LONG).show();
+                canvas.drawRect(visionWordModel.mrect, paint);
+
+
+                //write rect to images table
+                new Thread() {
+                    @Override
+                    public void run() {
+                        List<Images> images=dao.getDetails(
+                                visionWordModel.mrect.top,
+                                visionWordModel.mrect.bottom,
+                                visionWordModel.mrect.left,
+                                visionWordModel.mrect.right,
+
+                                MainActivity.currentUri
+                        );
+                        String sCopy=s;
+                        if(!sCopy.equals("#00000000")){
+                            sCopy="#CC" + sCopy.subSequence(1, sCopy.length());
+                        }
+                        if(images.isEmpty()){
+                            dao.insert(new Images(visionWordModel.mrect.left,
+                                    visionWordModel.mrect.top,
+                                    visionWordModel.mrect.right,
+                                    visionWordModel.mrect.bottom,
+                                    visionWordModel.mtext,
+                                    sCopy,
+                                    MainActivity.currentUri,
+                                    ""
+                            ));
+                        }
+                        else {
+
+                            try {
+                                Images images1 = images.get(0);
+                                images1.color = sCopy;
+                                dao.insert(images1);
+                            }
+                            catch (Error e){
+                                Toast.makeText(getContext().getApplicationContext(),e.toString(),Toast.LENGTH_LONG)
+                                        .show();
+                            }
+
+
+                        }
+
+
+                    }
+                }.start();
+
+            }
+            this.setImageBitmap(originalBitmap);
+        }
+    }
+
+    public void saveNote(String note){
+
+        try {
+            dao = MainActivity.db.getImagesDao();
+
+            if(selectedVisionTextRectanglesSimplified.isEmpty()){
+                Toast.makeText(getContext().getApplicationContext(),"Please select text",Toast.LENGTH_LONG).show();
+            }
+            else if(selectedVisionTextRectanglesSimplified.size()==1) {
+                for (final VisionWordModel visionWordModel : selectedVisionTextRectanglesSimplified) {
+
+
+                    new Thread() {
+                        @Override
+                        public void run() {
+
+                            List<Images> images=dao.getDetails(
+                                    visionWordModel.mrect.top,
+                                    visionWordModel.mrect.bottom,
+                                    visionWordModel.mrect.left,
+                                    visionWordModel.mrect.right,
+
+                                    MainActivity.currentUri
+                            );
+                            if(images.isEmpty()){
+
+                                dao.insert(new Images(visionWordModel.mrect.left,
+                                        visionWordModel.mrect.top,
+                                        visionWordModel.mrect.right,
+                                        visionWordModel.mrect.bottom,
+                                        visionWordModel.mtext,
+                                        "#00000000",
+                                        MainActivity.currentUri,
+                                        note
+                                ));
+                            }
+                            else {
+
+
+                                try {
+                                    Images images1 = images.get(0);
+                                    images1.note = note;
+                                    dao.insert(images1);
+                                    ((MainActivity)mContext).runOnUiThread(new Runnable() {
+                                        @Override
+                                        public void run() {
+
+                                        }
+                                    });
+                                }
+                                catch (Error e){
+                                    Toast.makeText(getContext().getApplicationContext(),e.toString(),Toast.LENGTH_LONG)
+                                            .show();
+                                }
+
+
+                            }
+
+
+
+
+                        }
+                    }.start();
+
+                }
+            }
+            else{
+                //ToDo:implement multi word
+                Toast.makeText(getContext().getApplicationContext(),"Multi word not yet implemented",Toast.LENGTH_LONG)
+                        .show();
+
+            }
+        }catch (Exception e){
+            Toast.makeText(getContext(),e.toString(),Toast.LENGTH_LONG).show();
+        }
+    }
+
+
+    private static final String TAG = "TouchImageView";
+    static boolean debugMode = false, snapToWord = false, allowZoom = false, showMargins = false, allWordBorders = false, toggleWordOnClick = false;
+    private Context mContext;
+    private ImageMatrixTouchHandler imageMatrixTouchHandler;
+    //private FirebaseAnalytics mFirebaseAnalytics;
+    //private MultiTouchListener multiTouchListener;
+
+    private boolean textSelectionInProgress = false;
+    private PointF startCursorPoint = new PointF(0,0);
+    private PointF endCursorPoint = new PointF(0,0);
+    private PointF leftMarginRulerPoint = new PointF(0,0);
+    private PointF rightMarginRulerPoint = new PointF(0,0);
+
+    private float lscaledImageWidth;
+    private float lscaledImageHeight;
+    private float loriginalImageWidth;
+    private float loriginalImageHeight;
+    float widthZoomFactor = 1, heightZoomFactor = 1;
+    int zoomedOffsetX, zoomedOffsetY;
+
+    private List<VisionWordModel> visionTextRectanglesSimplified = new ArrayList<>();
+    private int minWordHeight = 1000;
+    private List<VisionWordModel> zoomedVisionTextRectangles = new ArrayList<>();
+    private List<VisionWordModel> selectedVisionTextRectanglesSimplified = new ArrayList<>();
+
+    Bitmap unChangedOriginalBitmap = null;
+
+    OnCustomEventListener mListener;
+
+    public interface OnCustomEventListener {
+        void onEvent();
+    }
+
+    public void setCustomEventListener(OnCustomEventListener eventListener) {
+        mListener = eventListener;
+    }
+
+    public OnCustomEventListener getCustomEventListener() {
+        return mListener;
+    }
+
+    public TouchImageView(Context context) {
+        super(context);
+        sharedConstructing(context);
+        onImageChangeInImageView();
+    }
+
+    public TouchImageView(Context context, AttributeSet attrs) {
+        super(context, attrs);
+        sharedConstructing(context);
+        onImageChangeInImageView();
+    }
+
+    public TouchImageView(Context context, AttributeSet attrs, int defStyle) {
+        super(context, attrs, defStyle);
+        sharedConstructing(context);
+        onImageChangeInImageView();
+    }
+
+    public void resetOCR () {
+        //TouchImageView.super.setImageMatrix(new Matrix());
+        //TouchImageView.super.invalidate();
+        //TouchImageView.super.destroyDrawingCache();
+        try {
+            imageMatrixTouchHandler.animateZoom(0, 0);
+        } catch (Exception e) {
+            e.printStackTrace();
+            Bundle bundle = new Bundle();
+            //mFirebaseAnalytics.logEvent("EXCEPTION_animateZoom", bundle);
+        }
+        sharedConstructing(mContext);
+        unChangedOriginalBitmap = null;
+        onImageChangeInImageView();
+    }
+
+    public void initOptions (ImageViewSettingsModel imageViewSettingsModel){
+        if(imageViewSettingsModel.isZoomAllowed()){
+            allowZoom = true;
+            //TouchImageView.super.setOnTouchListener(imageMatrixTouchHandler);
+            imageMatrixTouchHandler.setScaleEnabled(true);
+            imageMatrixTouchHandler.setDragOnPinchEnabled(true);
+            imageMatrixTouchHandler.setTranslateEnabled(true);
+        }else{
+            allowZoom = false;
+            //TouchImageView.super.setOnTouchListener(multiTouchListener);
+            imageMatrixTouchHandler.setScaleEnabled(false);
+            imageMatrixTouchHandler.setDragOnPinchEnabled(false);
+            imageMatrixTouchHandler.setTranslateEnabled(false);
+        }
+        if(imageViewSettingsModel.isSnaptoWordMode()){
+            snapToWord = true;
+        }else{
+            snapToWord = false;
+        }
+        if(imageViewSettingsModel.isMarginsEnabled()){
+            showMargins = true;
+        }else{
+            showMargins = false;
+        }
+        if(imageViewSettingsModel.isAllWordBordersEnabled()){
+            allWordBorders = true;
+        }else{
+            allWordBorders = false;
+        }
+        if(imageViewSettingsModel.isToggleWordEnabled()){
+            toggleWordOnClick = true;
+        }else{
+            toggleWordOnClick = false;
+        }
+    }
+
+    private void onImageChangeInImageView() {
+        visionTextRectanglesSimplified.clear();
+        selectedVisionTextRectanglesSimplified.clear();
+
+        zoomedVisionTextRectangles.clear();
+        minWordHeight = 1000;
+        TouchImageView.super.getViewTreeObserver().addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener(){
+
+            @Override
+            public boolean onPreDraw() {
+                //Log.d(TAG, "onPreDraw: ");
+                try {
+                    if(unChangedOriginalBitmap == null && TouchImageView.super.getDrawable() != null) {
+                        unChangedOriginalBitmap = ((BitmapDrawable) TouchImageView.super.getDrawable()).getBitmap();
+                        final Bitmap originalBitmap = unChangedOriginalBitmap.copy(unChangedOriginalBitmap.getConfig(), true);
+                        //Log.d(TAG, "onPreDraw: unChangedOriginalBitmap");
+                        loriginalImageWidth = originalBitmap.getWidth();
+                        loriginalImageHeight = originalBitmap.getHeight();
+
+//                        if (visionTextRectanglesSimplified.isEmpty()) {
+//                            FirebaseVisionImage visionImage;
+//                            visionImage = FirebaseVisionImage.fromBitmap(originalBitmap);
+//                            FirebaseVisionTextRecognizer visionDetector = FirebaseVision.getInstance()
+//                                    .getOnDeviceTextRecognizer();
+//
+//                            Task<FirebaseVisionText> result =
+//                                    visionDetector.processImage(visionImage)
+//                                            .addOnSuccessListener(new OnSuccessListener<FirebaseVisionText>() {
+//                                                @Override
+//                                                public void onSuccess(FirebaseVisionText firebaseVisionText) {
+//                                                    // Task completed successfully
+//                                                    // ...
+//                                                    //Log.d(TAG, "visionDetector onSuccess: " + firebaseVisionText.getText());
+//                                                    java.util.List<FirebaseVisionText.TextBlock> textBlocks = firebaseVisionText.getTextBlocks();
+//
+//                                                    selectedVisionTextRectanglesSimplified.clear();
+//                                                    for (int i = 0; i < textBlocks.size(); i++) {
+//                                                        FirebaseVisionText.TextBlock tBlock = textBlocks.get(i);
+//                                                        java.util.List<FirebaseVisionText.Line> tBlockLines = tBlock.getLines();
+//                                                        for (int j = 0; j < tBlockLines.size(); j++) {
+//                                                            FirebaseVisionText.Line tLine = tBlockLines.get(j);
+//                                                            java.util.List<FirebaseVisionText.Element> tLineElements = tLine.getElements();
+//                                                            for (int k = 0; k < tLineElements.size(); k++) {
+//                                                                FirebaseVisionText.Element tElement = tLineElements.get(k);
+//                                                                Rect boundingRect = tElement.getBoundingBox();
+//
+//                                                                VisionWordModel visionWordModel = new VisionWordModel(boundingRect, tElement.getText());
+//                                                                visionTextRectanglesSimplified.add(visionWordModel);
+//                                                                if(boundingRect.height() < minWordHeight){
+//                                                                    minWordHeight = boundingRect.height();
+//                                                                }
+//                                                            }
+//                                                        }
+//                                                    }
+//                                                    try {
+//                                                        Collections.sort(visionTextRectanglesSimplified, new Comparator<VisionWordModel>() {
+//                                                            @Override
+//                                                            public int compare(VisionWordModel p1, VisionWordModel p2) {
+//                                                                // Ascending first left as same line words can have top +/- 5
+//                                                                int threshold = minWordHeight;
+//                                                                int c = 0;
+//                                                                if ((p1.mrect.top < p2.mrect.top + threshold) && (p1.mrect.top < p2.mrect.top - threshold)) {
+//                                                                    c = -1;
+//                                                                } else if ((p1.mrect.top > p2.mrect.top + threshold) && (p1.mrect.top > p2.mrect.top - threshold)) {
+//                                                                    c = 1;
+//                                                                }
+//                                                                if (c == 0)
+//                                                                    c = Double.compare(p1.mrect.left, p2.mrect.left);
+//                                                                return c;
+//                                                            }
+//                                                        });
+//                                                    }catch (Exception e){
+//                                                        // java.lang.IllegalArgumentException: Comparison method violates its general contract!
+//                                                        // https://stackoverflow.com/questions/11441666/java-error-comparison-method-violates-its-general-contract
+//                                                        android.util.Log.d(TAG, "Exception: sort ");
+//                                                        e.printStackTrace();
+//                                                        android.os.Bundle bundle = new android.os.Bundle();
+//                                                        mFirebaseAnalytics.logEvent("EXCEPTION_sort", bundle);
+//                                                    }
+//                                                }
+//                                            })
+//                                            .addOnFailureListener(
+//                                                    new OnFailureListener() {
+//                                                        @Override
+//                                                        public void onFailure(@androidx.annotation.NonNull Exception e) {
+//                                                            // Task failed with an exception
+//                                                            // ...
+//                                                            android.util.Log.d(TAG, "visionDetector onFailure: " + e.getMessage());
+//                                                        }
+//                                                    });
+//                        }
+
+                        if (visionTextRectanglesSimplified.isEmpty()) {
+                            InputImage visionImage = InputImage.fromBitmap(originalBitmap, 0);
+
+                            // Create text recognizers for multiple scripts
+                            TextRecognizer latinTextRecognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
+                            TextRecognizer chineseTextRecognizer = TextRecognition.getClient(new ChineseTextRecognizerOptions.Builder().build());
+                            TextRecognizer devanagariTextRecognizer = TextRecognition.getClient(new DevanagariTextRecognizerOptions.Builder().build());
+                            TextRecognizer japaneseTextRecognizer = TextRecognition.getClient(new JapaneseTextRecognizerOptions.Builder().build());
+                            TextRecognizer koreanTextRecognizer = TextRecognition.getClient(new KoreanTextRecognizerOptions.Builder().build());
+
+                            // Process the image with all recognizers
+                            processImageWithRecognizer(visionImage, latinTextRecognizer);
+                            processImageWithRecognizer(visionImage, devanagariTextRecognizer);
+                            processImageWithRecognizer(visionImage, japaneseTextRecognizer);
+                            processImageWithRecognizer(visionImage, koreanTextRecognizer);
+                        }
+
+
+
+
+
+                        TouchImageView.super.getViewTreeObserver().removeOnPreDrawListener(this);
+                    }
+                }catch (Exception e){
+                    e.printStackTrace();
+                    Bundle bundle = new Bundle();
+                    //mFirebaseAnalytics.logEvent("EXCEPTION_onPreDraw", bundle);
+                }
+                return true;    //note, that "true" is important, since you don't want drawing pass to be canceled
+            }
+        });
+    }
+
+    private void processImageWithRecognizer(InputImage visionImage, TextRecognizer recognizer) {
+        recognizer.process(visionImage)
+                .addOnSuccessListener(new OnSuccessListener<Text>() {
+                    @Override
+                    public void onSuccess(Text visionText) {
+                        // Task completed successfully
+                        List<Text.TextBlock> textBlocks = visionText.getTextBlocks();
+                        selectedVisionTextRectanglesSimplified.clear();
+                        for (Text.TextBlock tBlock : textBlocks) {
+                            List<Text.Line> tBlockLines = tBlock.getLines();
+                            for (Text.Line tLine : tBlockLines) {
+                                List<Text.Element> tLineElements = tLine.getElements();
+                                for (Text.Element tElement : tLineElements) {
+                                    Rect boundingRect = tElement.getBoundingBox();
+                                    VisionWordModel visionWordModel = new VisionWordModel(boundingRect, tElement.getText());
+                                    visionTextRectanglesSimplified.add(visionWordModel);
+                                    if (boundingRect.height() < minWordHeight) {
+                                        minWordHeight = boundingRect.height();
+                                    }
+                                }
+                            }
+                        }
+                        try {
+                            Collections.sort(visionTextRectanglesSimplified, new Comparator<VisionWordModel>() {
+                                @Override
+                                public int compare(VisionWordModel p1, VisionWordModel p2) {
+                                    // Ascending first left as same line words can have top +/- 5
+                                    int threshold = minWordHeight;
+                                    int c = 0;
+                                    if ((p1.mrect.top < p2.mrect.top + threshold) && (p1.mrect.top < p2.mrect.top - threshold)) {
+                                        c = -1;
+                                    } else if ((p1.mrect.top > p2.mrect.top + threshold) && (p1.mrect.top > p2.mrect.top - threshold)) {
+                                        c = 1;
+                                    }
+                                    if (c == 0)
+                                        c = Double.compare(p1.mrect.left, p2.mrect.left);
+                                    return c;
+                                }
+                            });
+                        } catch (Exception e) {
+                            // java.lang.IllegalArgumentException: Comparison method violates its general contract!
+                            // https://stackoverflow.com/questions/11441666/java-error-comparison-method-violates-its-general-contract
+                            Log.d(TAG, "Exception: sort ");
+                            e.printStackTrace();
+                            Bundle bundle = new Bundle();
+                            //mFirebaseAnalytics.logEvent("EXCEPTION_sort", bundle);
+                        }
+                    }
+                })
+                .addOnFailureListener(new OnFailureListener() {
+                    @Override
+                    public void onFailure(@NonNull Exception e) {
+                        // Task failed with an exception
+                        Log.d(TAG, "visionDetector onFailure: " + e.getMessage());
+                    }
+                });
+    }
+
+    private boolean isLongClick(MotionEvent event, boolean cancelZoomNav) {
+        // Check if the event action is ACTION_DOWN
+        if (event.getAction() == MotionEvent.ACTION_DOWN) {
+            return true;
+        }
+
+        // Check if the Android version is less than Nougat (API level 24)
+        // and the event action is ACTION_MOVE and cancelZoomNav is false
+        if (Build.VERSION.SDK_INT < VERSION_CODES.N &&
+                event.getAction() == MotionEvent.ACTION_MOVE &&
+                !cancelZoomNav) {
+            return true;
+        }
+
+        return false;
+    }
+
+    private void sharedConstructing(Context context) {
+        this.mContext = context;
+        //mFirebaseAnalytics = FirebaseAnalytics.getInstance(context);
+
+        ImageViewerCorrector corrector = new ImageViewerCorrector() {
+/*
+            @Override
+            public void setMatrix(Matrix matrix) {
+                super.setMatrix(matrix);
+            }
+
+            @Override
+            public float correctAbsolute(int vector, float x) {
+
+                float y = super.correctAbsolute(vector, x);
+                Log.d(TAG, "aqa correctAbsolute: vector " + vector + " before correction " + x + " after correction " + y);
+                return y;
+            }
+*/
+            @Override
+            public void performAbsoluteCorrections() {
+                super.performAbsoluteCorrections();
+                lscaledImageWidth = getScaledImageWidth();
+                lscaledImageHeight = getScaledImageHeight();
+            }
+        };
+        /*multiTouchListener = new MultiTouchListener() {
+
+        };*/
+        imageMatrixTouchHandler = new ImageMatrixTouchHandler(mContext, corrector) {
+            private int mode;
+            private boolean updateTouchState = true;
+            private boolean cancelZoomNav = false, startCursorMode = false, endCursorMode = false, leftRulerPointMode = false, rightRulerPointMode = false;
+            private List<Integer> pointerIds = new ArrayList<>(40);;
+            private android.util.SparseArray<PointF> startPoints = new android.util.SparseArray<>();
+
+            private PointF getTranslatedPoint(float touchX, float touchY){
+                PointF lPoint = new PointF(touchX, touchY);
+                float zoomedTouchX = zoomedOffsetX+(touchX/widthZoomFactor);
+                float zoomedTouchY = zoomedOffsetY+(touchY/heightZoomFactor);
+                if(heightZoomFactor <= 1){
+                    zoomedTouchY = touchY - zoomedOffsetY;
+                }
+                if(widthZoomFactor <= 1){
+                    zoomedTouchX = touchX - zoomedOffsetX;
+                }
+                lPoint.x = zoomedTouchX;
+                lPoint.y = zoomedTouchY;
+                return lPoint;
+            }
+
+            private boolean checkTouchPoint(PointF lPoint, float touchX, float touchY, int xOffset, int yOffset){
+                int thresholdRadius = 20;
+
+                float zoomedTouchX = zoomedOffsetX+(int)(touchX/widthZoomFactor);
+                float zoomedTouchY = zoomedOffsetY+(int)(touchY/heightZoomFactor);
+                if(heightZoomFactor <= 1){
+                    zoomedTouchY = touchY - zoomedOffsetY;
+                }
+                if(widthZoomFactor <= 1){
+                    zoomedTouchX = touchX - zoomedOffsetX;
+                }
+                if(zoomedTouchX >= lPoint.x + xOffset - thresholdRadius && zoomedTouchX <= lPoint.x + xOffset + thresholdRadius && zoomedTouchY >= lPoint.y + yOffset - thresholdRadius && zoomedTouchY <= lPoint.y + yOffset + thresholdRadius){
+                    return true;
+                }
+               // Log.d(TAG, "checkTouchPoint: not match zoomedTouchX "+ zoomedTouchX +" zoomedTouchY "+zoomedTouchY + " lPoint "+lPoint.toString());
+                return false;
+            }
+            private void evaluateTouchState(MotionEvent event, android.graphics.Matrix matrix) {
+                //Log.d(TAG, "ter evaluateTouchState: ");
+                // Update the mode
+                int touchCount = getTouchCount();
+                //Log.d(TAG, "ter evaluateTouchState: touchCount "+touchCount);
+                if(touchCount == 0) {
+                    updateTouchState = true;
+                    mode = NONE;
+                } else {
+                    if(touchCount == 1) {
+                        mode = DRAG;
+                    }
+                }
+                //Log.d(TAG, "ter evaluateTouchState: mode "+mode);
+            }
+
+            @Override
+            public boolean onTouch(android.view.View view, final MotionEvent event) {
+                //  Log.d(TAG, "onTouch: startCursorPoint "+startCursorPoint.toString()+" endCursorPoint "+endCursorPoint.toString());
+                ImageView imageView;
+                Integer pointerId;
+                try {
+                    imageView = (ImageView) view;
+                } catch (ClassCastException e) {
+                    Bundle bundle = new Bundle();
+                    //mFirebaseAnalytics.logEvent("EXCEPTION_ClassCastException", bundle);
+                    throw new IllegalStateException("View must be an instance of ImageView", e);
+                }
+                // Get the matrix
+                android.graphics.Matrix matrix = imageView.getImageMatrix();
+                //Log.d(TAG, "onTouch: ");
+                //Log.d(TAG, "zxc onTouch: " + event.getRawX() + " ; " + event.getX());
+                int actionMasked = event.getActionMasked();
+                int actionIndex = event.getActionIndex();
+/*
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    Log.d(TAG, "onTouch: actionMasked " + MotionEvent.actionToString(actionMasked) +" mode "+mode);
+                }*/
+                switch (actionMasked) {
+                    case MotionEvent.ACTION_UP:
+                        //Log.d(TAG, "onTouch: ACTION_UP mode "+mode);
+                        if (mode == DRAG) {
+                            cancelZoomNav = false;
+                            startCursorMode = false;
+                            endCursorMode = false;
+                            leftRulerPointMode = false;
+                            rightRulerPointMode = false;
+                            // Update zoomedVisionTextRectangles
+                            if ((loriginalImageHeight / loriginalImageWidth) > 1.3) {
+                                // Zoomed area is depending on aspect ratio of the image and device - portrait or landscape
+                                if (Build.VERSION.SDK_INT >= VERSION_CODES.N) {
+                                    zoomedVisionTextRectangles = visionTextRectanglesSimplified.stream().filter(filteredVisionWord -> (isWordWithinVisibleArea(filteredVisionWord))).collect(Collectors.toList());
+                                    //Log.d(TAG, "rdfer onTouch: zoomedVisionTextRectangles = visionTextRectanglesSimplified.stream()");
+                                }
+                            } else {
+                                //Log.d(TAG, "rdfer onTouch: zoomedVisionTextRectangles = visionTextRectanglesSimplified ");
+                                zoomedVisionTextRectangles = visionTextRectanglesSimplified;
+                            }
+                            /*//Paint zoomedarea rectangle
+                            Log.d(TAG, "sareds onTouch: getMeasuredWidth "+imageView.getMeasuredWidth()+" getWidth "+imageView.getWidth());
+                            //RectF zoomedAreaRect = new RectF(zoomedOffsetX+40,zoomedOffsetY+40,zoomedOffsetX+(loriginalImageWidth/widthZoomFactor)-40,zoomedOffsetY+(loriginalImageHeight/heightZoomFactor)-40);
+                            Rect zoomedAreaRect = new Rect(0, zoomedOffsetY,(int)loriginalImageWidth,zoomedOffsetY+(int)(loriginalImageHeight/heightZoomFactor));
+                            //Rect r = new Rect();
+                            //imageView.getWindowVisibleDisplayFrame(r);
+                            Bitmap originalBitmap = ((BitmapDrawable) TouchImageView.super.getDrawable()).getBitmap();
+                            //Bitmap originalBitmap = unChangedOriginalBitmap.copy(unChangedOriginalBitmap.getConfig(), true);
+                            Canvas canvas = new Canvas(originalBitmap);
+                            // Initialize a new Paint instance to draw the Rectangle
+                            Paint paint = new Paint();
+                            paint.setStyle(Paint.Style.STROKE);
+                            paint.setStrokeWidth(8);
+                            paint.setPathEffect(new DashPathEffect(new float[]{2, 2}, 0));
+                            paint.setColor(Color.YELLOW);
+                            paint.setAntiAlias(true);
+
+                            canvas.drawBitmap(originalBitmap, 0, 0, paint);
+                            //canvas.drawText("Testing...", 10, 10, paint);
+                            canvas.drawRect(zoomedAreaRect, paint);
+                            TouchImageView.super.setImageBitmap(originalBitmap);*/
+
+                        }
+                        if (false && mode == DRAG) {
+                            cancelZoomNav = false;
+                            if (startCursorMode) {
+                                startCursorPoint = getTranslatedPoint(event.getX(), event.getY());
+                            } else {
+                                endCursorPoint = getTranslatedPoint(event.getX(), event.getY());
+                            }
+                            //clearSelectedText();
+/*
+                            // Initialize a new Paint instance to draw the Rectangle
+                            Paint paint = new Paint();
+                            paint.setStyle(Paint.Style.STROKE);
+                            paint.setStrokeWidth(2);
+                            paint.setPathEffect(new DashPathEffect(new float[]{2, 2}, 0));
+                            paint.setColor(Color.RED);
+                            paint.setAntiAlias(true);
+
+                            final Bitmap originalBitmap = unChangedOriginalBitmap.copy(unChangedOriginalBitmap.getConfig(), true);
+                            Canvas canvas = new Canvas(originalBitmap);
+                            PointF lTranslatedTouch = getTranslatedPoint(event.getX(), event.getY());
+                            canvas.drawCircle(lTranslatedTouch.x, lTranslatedTouch.y, 30, paint);
+                            TouchImageView.super.setImageBitmap(originalBitmap);*/
+
+                            //selectWordInBetweenCursors();
+                        }
+                    case MotionEvent.ACTION_POINTER_UP:
+                        pointerId = event.getPointerId(actionIndex);
+                        pointerIds.remove(pointerId);
+                        startPoints.remove(pointerId);
+                        evaluateTouchState(event, matrix);
+                        break;
+                    case MotionEvent.ACTION_DOWN:
+                    case MotionEvent.ACTION_POINTER_DOWN:
+                        pointerId = event.getPointerId(actionIndex);
+                        PointF startPoint = new PointF(event.getX(actionIndex), event.getY(actionIndex));
+
+                        // Save the starting point
+                        startPoints.put(pointerId, startPoint);
+                        pointerIds.add(pointerId);
+                        evaluateTouchState(event, matrix);
+                        break;
+                    case MotionEvent.ACTION_MOVE:
+                        //Log.d(TAG, "ter onTouch: updateTouchState "+updateTouchState);
+                        if (updateTouchState) {
+                            evaluateTouchState(event, matrix);
+                            updateTouchState = false;
+                        }
+                        //Log.d(TAG, "ter onTouch: ACTION_MOVE mode "+mode+" DRAG "+DRAG);
+                        if (mode == DRAG) {
+                            // Log.d(TAG, "ter onTouch: mode == DRAG");
+                            if (!textSelectionInProgress && startCursorMode) {
+                                selectWordInBetweenCursors(getTranslatedPoint(event.getX(), event.getY()), null, null, null);
+                            } else if (!textSelectionInProgress && endCursorMode) {
+                                selectWordInBetweenCursors(null, getTranslatedPoint(event.getX(), event.getY()), null, null);
+                            } else if (!textSelectionInProgress && leftRulerPointMode) {
+                                selectWordInBetweenCursors(null, null, getTranslatedPoint(event.getX(), event.getY()), null);
+                            } else if (!textSelectionInProgress && rightRulerPointMode) {
+                                selectWordInBetweenCursors(null, null, null, getTranslatedPoint(event.getX(), event.getY()));
+                            }
+
+                            //Log.d(TAG, "ter onTouch: startPoints "+startPoints.toString());
+                            if (checkTouchPoint(startCursorPoint, event.getX(), event.getY(), -20, -20)) {
+                                // Log.d(TAG, "ter onTouch: match startCursorPoint");
+                                cancelZoomNav = true;
+                                startCursorMode = true;
+                            } else if (checkTouchPoint(endCursorPoint, event.getX(), event.getY(), 20, 20)) {
+                                cancelZoomNav = true;
+                                endCursorMode = true;
+                            } else if (checkTouchPoint(leftMarginRulerPoint, event.getX(), event.getY(), 0, 0)) {
+                                //  Log.d(TAG, "ter onTouch: match startCursorPoint");
+                                cancelZoomNav = true;
+                                leftRulerPointMode = true;
+                            } else if (checkTouchPoint(rightMarginRulerPoint, event.getX(), event.getY(), 0, 0)) {
+                                cancelZoomNav = true;
+                                rightRulerPointMode = true;
+                            } else {
+                                // Log.d(TAG, "ter onTouch: fail startCursorPoint startCursorPoint "+startCursorPoint.toString()+" x "+event.getX()+" y "+event.getY());
+                            }
+                        }
+                        break;
+                    case MotionEvent.ACTION_CANCEL:
+                        //Log.d(TAG, "ter onTouch: ACTION_CANCEL");
+                        pointerIds.clear();
+                        updateTouchState = true;
+                        startPoints.clear();
+                        break;
+                }
+
+
+
+
+
+                /*float[] pts = {0, 0};
+                matrix.mapPoints(pts);
+                Log.d(TAG, "jkl onTouch: mapPoints " + pts[0] + ", " + pts[1]);*/
+/*
+                // Before calculating new zoomFactor & new Offset, use the old values
+                int startX = mivStartCursor.getLeft()+0;  // 100 is width of cursor
+                int startY = mivStartCursor.getTop()+0;
+                int endX = mivEndCursor.getLeft();
+                int endY = mivEndCursor.getTop();
+                int visionRectLeft = (int)((startX + zoomedOffsetX*widthZoomFactor)/widthZoomFactor);
+                int visionRectTop = (int)((startY + zoomedOffsetY*heightZoomFactor)/heightZoomFactor);
+                int visionRectRight = (int)((endX + zoomedOffsetX*widthZoomFactor)/widthZoomFactor);
+                int visionRectBottom = (int)((endY + zoomedOffsetY*heightZoomFactor)/heightZoomFactor);*/
+
+                final float[] values = new float[9];
+                matrix.getValues(values);
+
+                float transX = values[android.graphics.Matrix.MTRANS_X];
+                float transY = values[android.graphics.Matrix.MTRANS_Y];
+                //Log.d(TAG, "hfdr onTouch: transY "+transY+" MSCALE_X "+values[Matrix.MSCALE_X]+" MSKEW_X "+values[Matrix.MSKEW_X]);
+
+                //Log.d(TAG, "fgh onTouch: lscaledImageWidth " + lscaledImageWidth + " loriginalImageWidth " + loriginalImageWidth);
+                if (lscaledImageWidth < loriginalImageWidth) {
+                    lscaledImageWidth = loriginalImageWidth;
+                }
+                if (lscaledImageHeight < loriginalImageHeight) {
+                    lscaledImageHeight = loriginalImageHeight;
+                }
+                widthZoomFactor = lscaledImageWidth / loriginalImageWidth;
+                if (widthZoomFactor == 1) {
+                    zoomedOffsetX = (int) (-1 * (Math.abs(transX)) / widthZoomFactor);
+                } else {
+                    zoomedOffsetX = (int) ((Math.abs(transX)) / widthZoomFactor);
+                }
+                heightZoomFactor = lscaledImageHeight / loriginalImageHeight;
+                if (heightZoomFactor == 1) {
+                    //zoomedOffsetY = 0;
+                    // If there is a Toolbar widget at the top, that will add to offset
+                    zoomedOffsetY = (int) (1 * (Math.abs(transY)) / heightZoomFactor);
+                } else {
+                    zoomedOffsetY = (int) ((Math.abs(transY)) / heightZoomFactor);
+                }
+                // Log.d(TAG, "ghy onTouch: onTouch event1.getAction() "+event.getAction());
+
+                // Log.d(TAG, "jkl getValues " + transX + " : " + transY);
+
+
+                if (gestureDetector1 == null) {
+                    gestureDetector1 = new GestureDetector(mContext, new GestureDetector.SimpleOnGestureListener() {
+
+
+
+
+                        @Override
+                        public boolean onDown(MotionEvent event) {
+                //            Toast.makeText(mContext, "Down detected", Toast.LENGTH_SHORT).show();
+                            return true;
+                        }
+
+                        @Override
+                        public boolean onSingleTapUp(MotionEvent e) {
+                //            Toast.makeText(mContext, "Single tap detected", Toast.LENGTH_SHORT).show();
+                            final int touchX = (int) e.getX();
+                            final int touchY = (int) e.getY();
+                            // Clear previous selection to avoid multiple rectangles
+ //                           selectedVisionTextRectanglesSimplified.clear();
+
+                            // Reset image to original to remove previous rectangles
+//                            if (unChangedOriginalBitmap != null) {
+//                                TouchImageView.this.setImageBitmap(unChangedOriginalBitmap.copy(Bitmap.Config.ARGB_8888, true));
+//                            }
+
+                            TouchImageView.this.invalidate(); // Force UI refresh
+
+                            // Select the new word (ensuring old selections are gone)
+                            if (toggleWordOnClick) {
+                                selectWordOnTouch(touchX, touchY, false);
+                            }
+                            return true;
+                        }
+
+
+                    @Override
+                    public void onLongPress(MotionEvent e) {
+                        final int touchX = (int) e.getX();
+                        final int touchY = (int) e.getY();
+
+                   //     Toast.makeText(mContext, "Long press detected at X: " + touchX + ", Y: " + touchY, Toast.LENGTH_SHORT).show();
+
+                        updateTouchState = true;
+
+                        if (unChangedOriginalBitmap == null) {
+                            return;
+                        }
+
+                        final Bitmap originalBitmap = unChangedOriginalBitmap.copy(Bitmap.Config.ARGB_8888, true);
+                        selectedVisionTextRectanglesSimplified.clear();
+
+                        if (debugMode || allWordBorders) {
+                            Canvas canvas = new Canvas(originalBitmap);
+                            Paint paint = new Paint();
+                            paint.setStyle(Paint.Style.STROKE);
+                            paint.setStrokeWidth(2);
+                            paint.setPathEffect(new DashPathEffect(new float[]{2, 2}, 0));
+                            paint.setColor(Color.YELLOW);
+                            paint.setAntiAlias(true);
+
+                            for (VisionWordModel visionWordModel : visionTextRectanglesSimplified) {
+                                Rect rect = visionWordModel.mrect;
+                                canvas.drawRect(rect, paint);
+                            }
+
+                            TouchImageView.this.setImageBitmap(originalBitmap);
+                            TouchImageView.this.invalidate(); // Refresh the view
+                        }
+
+                        // Ensure word selection happens
+
+
+
+                            selectWordOnTouch(touchX, touchY, true);
+
+
+
+                    }
+
+                    });
+                }
+
+
+//                final MotionEvent event1 = event;
+//                final GestureDetector gestureDetector = new GestureDetector(mContext, new GestureDetector.SimpleOnGestureListener() {
+//                    @Override
+//                    public void onLongPress(MotionEvent e) {
+//                        int touchX = (int) e.getX();
+//                        int touchY = (int) e.getY();
+//
+//                        if (event1.getAction() == MotionEvent.ACTION_UP) {
+//                            if (toggleWordOnClick) {
+//                                selectWordOnTouch(touchX, touchY, false);
+//                            }
+//                        } else if (isLongClick(event1, cancelZoomNav)) {
+//                            Toast.makeText(mContext, "Long Clicked", Toast.LENGTH_SHORT).show();
+//                            updateTouchState = true;
+//                            Bitmap originalBitmap = unChangedOriginalBitmap.copy(unChangedOriginalBitmap.getConfig(), true);
+//                            selectedVisionTextRectanglesSimplified.clear();
+//
+//                            if (debugMode || allWordBorders) {
+//                                for (VisionWordModel visionWordModel : visionTextRectanglesSimplified) {
+//                                    Rect rect = visionWordModel.mrect;
+//                                    Canvas canvas = new Canvas(originalBitmap);
+//                                    Paint paint = new Paint();
+//                                    paint.setStyle(Paint.Style.STROKE);
+//                                    paint.setStrokeWidth(2);
+//                                    paint.setPathEffect(new DashPathEffect(new float[]{2, 2}, 0));
+//                                    paint.setColor(Color.YELLOW);
+//                                    paint.setAntiAlias(true);
+//                                    canvas.drawBitmap(originalBitmap, 0, 0, paint);
+//                                    canvas.drawRect(rect, paint);
+//                                }
+//                                TouchImageView.super.setImageBitmap(originalBitmap);
+//                            }
+//                            selectWordOnTouch(touchX, touchY, true);
+//                        }
+//                    }
+//                });
+
+
+                //  Log.d(TAG, "zxc onTouch: " + event.getRawX() + " ; " + event.getX());
+                try {
+
+                        gestureDetector1.onTouchEvent(event);
+
+
+                }catch (Exception e){
+                    Log.d(TAG, "onTouch: gestureDetector.onTouchEvent(event);");
+                    e.printStackTrace();
+                    Bundle bundle = new Bundle();
+                    //mFirebaseAnalytics.logEvent("EXCEPTION_onTouchEvent", bundle);
+                }
+               // Log.d(TAG, "zxc onTouch: " + event.getRawX() + " ; " + event.getX());
+                if(!cancelZoomNav) {
+                    try {
+                        super.onTouch(view, event);
+                    }catch (Exception e){
+                        e.printStackTrace();
+                        Bundle bundle = new Bundle();
+                        //mFirebaseAnalytics.logEvent("EXCEPTION_onTouch", bundle);
+                        /*ViewGroup.LayoutParams lParams = imageView.getLayoutParams();
+                        OnCustomEventListener mlListener = mListener;
+                        RelativeLayout imageParentLayout = (RelativeLayout)imageView.getParent();
+                        if(imageParentLayout != null) {
+                            Log.d(TAG, "onTouch: imageParentLayout");
+                            imageParentLayout.removeView(imageView);
+                            imageView = new TouchImageView(mContext);
+                            ((TouchImageView) imageView).setCustomEventListener(mlListener);
+                            Log.d(TAG, "onTouch: ((TouchImageView) imageView).setCustomEventListener(mListener); ");
+                            imageView.setLayoutParams(lParams);
+                            imageParentLayout.addView(imageView);
+                        }else{
+                            Log.d(TAG, "onTouch: setImageMatrix ");
+                            TouchImageView.super.setImageMatrix(new Matrix());
+                        }*/
+                        TouchImageView.super.setImageMatrix(new android.graphics.Matrix());
+                        TouchImageView.super.invalidate();
+
+                        Canvas canvas = new Canvas(unChangedOriginalBitmap);
+                        Paint mPaint = new Paint();
+                        mPaint.setColor(Color.RED);
+                        android.graphics.Path mPath = new android.graphics.Path();
+                        RectF mRectF = new RectF(60, 60, loriginalImageWidth - 60, loriginalImageHeight - 60);
+                        mPath.addRect(mRectF, android.graphics.Path.Direction.CW);
+                        mPaint.setStrokeWidth(80);
+                        mPaint.setStyle(Paint.Style.STROKE);
+                        canvas.drawPath(mPath, mPaint);
+
+                        mPaint.setColor(Color.BLUE);
+                        mPaint.setStrokeWidth(0);
+                        mPaint.setStyle(Paint.Style.FILL);
+                        mPaint.setTextSize(80);
+                        canvas.drawTextOnPath("Error! Please reopen the resource!", mPath, 0, 15, mPaint);
+
+                        imageView.setImageBitmap(unChangedOriginalBitmap);
+                        //resetOCR();
+                        //return true;
+                    }
+                }
+                return true; // indicate event was handled
+            }
+        };
+
+        TouchImageView.super.setOnTouchListener(imageMatrixTouchHandler);
+        //TouchImageView.super.setOnTouchListener(new ImageMatrixTouchHandler(mContext));
+    }
+
+    public static <T> java.util.function.Predicate<T> distinctByKey(java.util.function.Function<? super T, ?> keyExtractor) {
+        if (Build.VERSION.SDK_INT >= VERSION_CODES.N) {
+            java.util.Set<Object> seen = ConcurrentHashMap.newKeySet();
+            return t -> seen.add(keyExtractor.apply(t));
+        }
+        return null;
+    }
+
+    private boolean isWordBetweenCursors(VisionWordModel filteredVisionWord, PointF fstartCursorPoint, PointF fendCursorPoint, float innerMarginAreaLeft, float innerMarginAreaRight){
+        Float startTop = fstartCursorPoint.y;
+        Float endTop = fendCursorPoint.y;
+        boolean status = filteredVisionWord.getLeft() >= innerMarginAreaLeft && filteredVisionWord.getRight() <= innerMarginAreaRight && filteredVisionWord.getBottom() >= startTop && filteredVisionWord.getTop() <= endTop;
+        //Log.d(TAG, "isWordBetweenCursors: status "+status+ " mtext "+ filteredVisionWord.mtext + " startTop "+startTop + " getTop "+ filteredVisionWord.getTop()+ " getBottom "+ filteredVisionWord.getBottom()+" endTop "+endTop);
+        return status;
+    }
+
+    private boolean isWordWithinVisibleArea(VisionWordModel filteredVisionWord){
+        //Rect zoomedAreaRect = new Rect(zoomedOffsetX,zoomedOffsetY,zoomedOffsetX+(int)(loriginalImageWidth/widthZoomFactor),zoomedOffsetY+(int)(loriginalImageHeight/heightZoomFactor));
+        Rect zoomedAreaRect = new Rect(0, zoomedOffsetY,(int)loriginalImageWidth,zoomedOffsetY+(int)(loriginalImageHeight/heightZoomFactor));
+        return zoomedAreaRect.contains(filteredVisionWord.mrect);
+    }
+
+    private boolean isWordExactlyBetweenMarginsAndCursors(Rect rect, RectF innerMarginAreaRect, RectF innerCursorAreaRect, float startX, float startY, float endX, float endY) {
+        boolean innerMarginAreaRectStatus = true;
+        if(showMargins){
+            innerMarginAreaRectStatus = innerMarginAreaRect.contains(rect.left, rect.top);
+        }
+        if(!innerCursorAreaRect.isEmpty()) {
+            if (innerMarginAreaRectStatus && (((rect.top < innerCursorAreaRect.top && rect.top >= startY && (rect.right >= startX || rect.left >= startX)) || (rect.top > innerCursorAreaRect.top && rect.bottom <= endY && (rect.left <= endX || rect.right <= endX))) || innerCursorAreaRect.contains(rect.left, rect.top))) {
+                return true;
+            }
+        }else{
+            if (innerMarginAreaRectStatus && ((rect.left >= startX && rect.top >= startY && rect.top <= endY) && (rect.left <= endX && rect.bottom >= startY && rect.bottom <= endY))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+
+
+    private void selectWordInBetweenCursors(PointF mstartCursorPoint, PointF mendCursorPoint, PointF mleftMarginPoint, PointF mrightMarginPoint) {
+        //Map<Rect, String> lselectedVisionTextRectangles = new HashMap<Rect, String>();
+        boolean changeStartCursorPoint = true, changeEndCursorPoint = true, changeLeftMarginPoint = true, changeRightMarginPoint = true;
+        textSelectionInProgress = true;
+        //List<PointF> allWordStartPoints = new ArrayList<>();
+        List<Integer> allWordTopPositions = new ArrayList<>();
+        List<Integer> allWordBottomPositions = new ArrayList<>();
+        //List<Float> allWordTopPositionsUnique = new ArrayList<>();
+        //List<PointF> allWordEndPoints = new ArrayList<>();
+        if(mstartCursorPoint == null){
+            mstartCursorPoint = startCursorPoint;
+            changeStartCursorPoint = false;
+        }
+        if(mendCursorPoint == null){
+            changeEndCursorPoint = false;
+            mendCursorPoint = endCursorPoint;
+        }
+        if(mleftMarginPoint == null){
+            mleftMarginPoint = leftMarginRulerPoint;
+            changeLeftMarginPoint = false;
+        }
+        if(mrightMarginPoint == null){
+            changeRightMarginPoint = false;
+            mrightMarginPoint = rightMarginRulerPoint;
+        }
+        int startX = (int)mstartCursorPoint.x;
+        int startY = (int)mstartCursorPoint.y;
+        int endX = (int)mendCursorPoint.x;
+        int endY = (int)mendCursorPoint.y;
+        //RectF cursorAreaRect = new RectF();
+        /*cursorAreaRect.left = (int)((startX + zoomedOffsetX*widthZoomFactor)/widthZoomFactor);
+        cursorAreaRect.top = (int)((startY + zoomedOffsetY*heightZoomFactor)/heightZoomFactor);
+        cursorAreaRect.right = (int)((endX + zoomedOffsetX*widthZoomFactor)/widthZoomFactor);
+        cursorAreaRect.bottom = (int)((endY + zoomedOffsetY*heightZoomFactor)/heightZoomFactor);*/
+        /*cursorAreaRect.left = startX ;
+        cursorAreaRect.top = startY;
+        cursorAreaRect.right = endX;
+        cursorAreaRect.bottom = endY;*/
+
+        RectF innerMarginAreaRect = new RectF();
+        innerMarginAreaRect.left = mleftMarginPoint.x ;
+        innerMarginAreaRect.top = 0;
+        innerMarginAreaRect.right = mrightMarginPoint.x;
+        innerMarginAreaRect.bottom = loriginalImageHeight;
+        //Log.d(TAG, "selectWordInBetweenCursors: cursorAreaRect "+cursorAreaRect.toShortString());
+
+        //Bitmap originalBitmap;
+        //originalBitmap = ((BitmapDrawable) TouchImageView.super.getDrawable()).getBitmap();
+        final Bitmap originalBitmap = unChangedOriginalBitmap.copy(unChangedOriginalBitmap.getConfig(), true);
+        Canvas canvas = new Canvas(originalBitmap);
+/*
+        // Initialize a new Paint instance to draw the Rectangle
+        Paint paint1 = new Paint();
+        paint1.setStyle(Paint.Style.FILL_AND_STROKE);
+        //paint1.setStrokeWidth(2);
+        //paint1.setPathEffect(new DashPathEffect(new float[]{2, 2}, 0));
+        paint1.setColor(Color.argb(50, 255, 0, 0));
+        paint1.setAntiAlias(true);
+
+
+
+        canvas.drawBitmap(originalBitmap, 0, 0, paint1);
+        canvas.drawRect(cursorAreaRect, paint1);*/
+
+
+        /*List<VisionWordModel> filteredList
+                = visionTextRectanglesSimplified.newArrayList(Collections2.filter(listArticles,
+                new ArticleFilter("test")));*/
+        final Float startTop = mstartCursorPoint.y;
+        final Float endTop = mendCursorPoint.y;
+        final PointF fstartCursorPoint = mstartCursorPoint;
+        final PointF fendCursorPoint = mendCursorPoint;
+        List<VisionWordModel> filteredVisionWordList = visionTextRectanglesSimplified;
+        if (Build.VERSION.SDK_INT >= VERSION_CODES.N) {
+            if(zoomedVisionTextRectangles.size() <= 0 && visionTextRectanglesSimplified.size() >= 1){
+                zoomedVisionTextRectangles = visionTextRectanglesSimplified;
+            }
+            filteredVisionWordList = zoomedVisionTextRectangles.stream().filter(filteredVisionWord -> (isWordBetweenCursors(filteredVisionWord, fstartCursorPoint, fendCursorPoint, innerMarginAreaRect.left, innerMarginAreaRect.right))).collect(Collectors.toList());
+        }
+        if(allWordBorders){
+            // draw Yellow Word border
+            Paint paint = new Paint();
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(2);
+            paint.setPathEffect(new DashPathEffect(new float[]{2, 2}, 0));
+            paint.setColor(Color.YELLOW);
+            paint.setAntiAlias(true);
+            for (VisionWordModel visionWordModel : zoomedVisionTextRectangles) {
+                Rect rect = visionWordModel.mrect;
+                canvas.drawRect(rect, paint);
+            }
+        }
+        //Iterator it = visionTextRectangles.entrySet().iterator();
+
+        //selectedVisionTextRectangles.clear();
+        //selectedVisionText.clear();
+        // TODO: get selected text, top word line & bottom word line for innerCursorAreaRect
+        List<VisionWordModel> filteredVisionWordListUnique = new ArrayList<>();
+        RectF innerCursorAreaRect = new RectF(0,0,0,0);
+        /*if (Build.VERSION.SDK_INT >= VERSION_CODES.N) {
+            filteredVisionWordListUnique = filteredVisionWordList.stream()
+                    .distinct()
+                    .filter(distinctByKey(VisionWordModel::getTop))
+                    .collect(Collectors.toList());
+            for (VisionWordModel visionWordModel1 : filteredVisionWordListUnique) {
+                Log.d(TAG, endY+" selectWordInBetweenCursors: visionWordModel1 mtext "+visionWordModel1.mtext+"mrect "+visionWordModel1.mrect.toShortString());
+            }
+            if(filteredVisionWordListUnique.size() >= 2) {
+                innerCursorAreaRect.left = 0;
+                innerCursorAreaRect.right = loriginalImageWidth;
+                if(filteredVisionWordListUnique.size() == 2){
+                    innerCursorAreaRect.top = filteredVisionWordListUnique.get(0).getBottom();
+                    innerCursorAreaRect.bottom = filteredVisionWordListUnique.get(1).getTop();
+                }else {
+                    innerCursorAreaRect.top = filteredVisionWordListUnique.get(1).getTop();
+                    innerCursorAreaRect.bottom = filteredVisionWordListUnique.get(filteredVisionWordListUnique.size() - 2).getBottom();
+                }
+                Log.d(TAG, "zfew selectWordInBetweenCursors: innerCursorAreaRect "+innerCursorAreaRect.toShortString()+" startY "+startY + " endY "+endY+" filteredVisionWordListUnique.get(0).getTop() "+filteredVisionWordListUnique.get(0).getTop()+" filteredVisionWordListUnique.get(filteredVisionWordListUnique.size() - 1).getBottom() "+filteredVisionWordListUnique.get(filteredVisionWordListUnique.size() - 1).getBottom());
+            }else if(filteredVisionWordListUnique.size() == 1) {
+                //innerCursorAreaRect = new RectF(startX,startY,endX,endY);
+                //Log.d(TAG, "zfew selectWordInBetweenCursors: filteredVisionWordListUnique.size()"+filteredVisionWordListUnique.size());
+            }
+        }else {*/
+            for (VisionWordModel visionWordModel : filteredVisionWordList) {
+                Rect rect = visionWordModel.mrect;
+                if (rect.top >= startY && rect.bottom <= endY) {
+                    // Sometimes OCR detects word in same line as different rect.bottom +/- 2
+                    if (!checkSameLineWords(allWordTopPositions, rect.top)) {
+                        allWordTopPositions.add(rect.top);
+                    }
+                    if (!checkSameLineWords(allWordBottomPositions, rect.bottom)) {
+                       // Log.d(TAG, "selectWordInBetweenCursors: rect.bottom "+Float.valueOf(rect.bottom)+" allWordBottomPositions "+allWordBottomPositions.toString());
+                        allWordBottomPositions.add(rect.bottom);
+                    }
+                }
+            }
+            Collections.sort(allWordTopPositions, new Comparator<Integer>() {
+                @Override
+                public int compare(Integer o1, Integer o2) {
+                    return Integer.compare(o1, o2);
+                }
+            });
+            Collections.sort(allWordBottomPositions, new Comparator<Integer>() {
+                @Override
+                public int compare(Integer o1, Integer o2) {
+                    return Integer.compare(o1, o2);
+                }
+            });
+            Collections.reverse(allWordBottomPositions);
+       // Log.d(TAG, "aweds selectWordInBetweenCursors: allWordBottomPositions"+allWordBottomPositions.toString());
+            if(allWordTopPositions.size() >= 2 && allWordBottomPositions.size() >= 2) {
+                innerCursorAreaRect.left = 0;
+                innerCursorAreaRect.right = loriginalImageWidth;
+                if(allWordTopPositions.size() == 2){
+                    innerCursorAreaRect.top = allWordBottomPositions.get(1);
+                    innerCursorAreaRect.bottom = allWordTopPositions.get(1);
+                }else {
+                    innerCursorAreaRect.top = allWordTopPositions.get(1);
+                    innerCursorAreaRect.bottom = allWordBottomPositions.get(1);
+                }
+            }else{
+              //  Log.d(TAG, "zfew selectWordInBetweenCursors: innerCursorAreaRect "+innerCursorAreaRect.toShortString());
+              //  Log.d(TAG, "zfew selectWordInBetweenCursors: allWordTopPositions.size()  "+allWordTopPositions.size() +" allWordBottomPositions.size() "+allWordBottomPositions.size() );
+            }
+        //Log.d(TAG, "aweds selectWordInBetweenCursors: innerCursorAreaRect "+innerCursorAreaRect.toShortString());
+        // }
+        selectedVisionTextRectanglesSimplified.clear();
+        for (VisionWordModel visionWordModel : filteredVisionWordList) {
+            //while (it.hasNext()) {
+            //Map.Entry pair = (Map.Entry) it.next();
+            //Rect rect = (Rect) pair.getKey();
+            Rect rect = visionWordModel.mrect;
+            //Log.d(TAG, "cfde selectWordInBetweenCursors: mtext "+visionWordModel.mtext);
+            //Log.d(TAG, "selectWordInBetweenCursors: word "+pair.getValue().toString()+" rect "+rect.toShortString());
+            // Get second top most word position for innerCursorAreaRect
+
+            //Log.d(TAG, "selectWordInBetweenCursors: size allWordStartPoints "+allWordStartPoints.size());
+            //Set<Float> allWordTopPositionsUniqueSet = new HashSet<>(allWordTopPositions);
+            //allWordTopPositionsUnique.addAll(allWordTopPositionsUniqueSet);
+            //Log.d(TAG, "vbg selectWordInBetweenCursors: size allWordTopPositionsUnique "+allWordTopPositions.size()+" all: "+allWordTopPositions.toString());
+
+            // Get top word of second line from top & bottom word of second line from bottom
+
+            /*if(filteredVisionWordListUnique.size() >= 2 && filteredVisionWordListUnique.size() >= 2) {
+                innerCursorAreaRect.left = 0;
+                innerCursorAreaRect.top = filteredVisionWordListUnique.get(1).getTop();
+                innerCursorAreaRect.right = loriginalImageWidth;
+                innerCursorAreaRect.bottom = filteredVisionWordListUnique.get(filteredVisionWordListUnique.size() - 2).getBottom();
+            }else{
+                //innerCursorAreaRect = cursorAreaRect;
+            }*/
+            /*
+            words to the right of startX: rect.top < innerCursorAreaRect.top && rect.top >= startY && rect.left >= startX
+            words to the left of endX: rect.top > innerCursorAreaRect.top && rect.left <= endX
+             */
+            if (isWordExactlyBetweenMarginsAndCursors(rect, innerMarginAreaRect, innerCursorAreaRect, startX, startY, endX, endY)){
+                // Add red
+                //if(!selectedVisionTextRectangles.contains(rect)) {
+                    //Log.d(TAG, "red selectWordInBetweenCursors: pair.getValue().toString() " + pair.getValue().toString() + " rect " + rect.toShortString());
+                    //selectedVisionTextRectangles.add(rect);
+
+                    //selectedVisionText.add(pair.getValue().toString());
+                    //lselectedVisionTextRectangles.put(rect, visionWordModel.mtext);
+
+
+                    // Initialize a new Paint instance to draw the Rectangle
+                    Paint paint = new Paint();
+                    paint.setStyle(Paint.Style.STROKE);
+                    paint.setStrokeWidth(2);
+                    paint.setPathEffect(new DashPathEffect(new float[]{2, 2}, 0));
+                    paint.setColor(Color.RED);
+                    paint.setAntiAlias(true);
+
+                    //canvas.drawBitmap(originalBitmap, 0, 0, paint);
+                    //canvas.drawText("Testing...", 10, 10, paint);
+                    canvas.drawRect(rect, paint);
+                selectedVisionTextRectanglesSimplified.add(visionWordModel);
+               // }
+            }
+        }
+        //List<Rect> justRect = new ArrayList<>(lselectedVisionTextRectangles.keySet());
+        /*Collections.sort(selectedVisionTextRectanglesSimplified, new Comparator<VisionWordModel>() {
+            @Override
+            public int compare(VisionWordModel p1, VisionWordModel p2) {
+                // Ascending
+                int c = Double.compare(p1.mrect.top, p2.mrect.top);
+                if (c == 0)
+                    c = Double.compare(p1.mrect.left, p2.mrect.left);
+                return c;
+            }
+        });*/
+        List<String> selectedVisionText = new ArrayList<>();
+        if (Build.VERSION.SDK_INT >= VERSION_CODES.N) {
+            selectedVisionText =
+                    selectedVisionTextRectanglesSimplified.stream()
+                            .map(VisionWordModel::getText)
+                            .collect(Collectors.toList());
+        }else{
+            for (VisionWordModel visionWordModel : selectedVisionTextRectanglesSimplified) {
+                selectedVisionText.add(visionWordModel.mtext);
+            }
+        }
+        /*for (Rect rect : justRect) {
+            selectedVisionText.add(lselectedVisionTextRectangles.get(rect));
+        }*/
+        /*Log.d(TAG, "before srt selectWordInBetweenCursors: "+allWordStartPoints.toString());
+        Collections.sort(allWordStartPoints, new Comparator<PointF>() {
+            @Override
+            public int compare(PointF p1, PointF p2) {
+                // Ascending
+                int c = Double.compare(p1.y, p2.y);
+                if (c == 0)
+                    c = Double.compare(p1.x, p2.x);
+                return c;
+            }
+        });
+        Collections.sort(allWordEndPoints, new Comparator<PointF>() {
+            @Override
+            public int compare(PointF p1, PointF p2) {
+                // Ascending
+                int c = Double.compare(p1.y, p2.y);
+                if (c == 0)
+                    c = Double.compare(p1.x, p2.x);
+                return c;
+            }
+        });
+        Collections.reverse(allWordEndPoints);*/
+        //
+        //Log.d(TAG, "after srt selectWordInBetweenCursors: "+allWordStartPoints.toString());
+        // Get top left most
+        PointF firstTopLeftWordPoint = null;
+        if(selectedVisionTextRectanglesSimplified.size() >= 1) {
+            firstTopLeftWordPoint = new PointF(selectedVisionTextRectanglesSimplified.get(0).mrect.left, selectedVisionTextRectanglesSimplified.get(0).mrect.top);
+        }
+        PointF lastBottomRightWordPoint = null;
+        if(selectedVisionTextRectanglesSimplified.size() >= 1) {
+            int count = selectedVisionTextRectanglesSimplified.size();
+            lastBottomRightWordPoint = new PointF(selectedVisionTextRectanglesSimplified.get(count-1).mrect.right, selectedVisionTextRectanglesSimplified.get(count-1).mrect.bottom);
+        }
+        //
+        if(changeStartCursorPoint){
+            // get top left most point of the top left most word in image
+            //Log.d(TAG, "selectWordInBetweenCursors: changeStartCursorPoint");
+            //if(allWordStartPoints.size() >= 1) {
+            if(snapToWord && (firstTopLeftWordPoint != null)){
+                startCursorPoint = firstTopLeftWordPoint;
+                //startCursorPoint = allWordStartPoints.get(0);
+            }else {
+                startCursorPoint = mstartCursorPoint;
+            }
+        }
+        if(changeEndCursorPoint){
+            // get bottom right most point of the bottom right most word in image
+
+            //Log.d(TAG, "selectWordInBetweenCursors: changeendCursorPoint");
+            if(snapToWord && (lastBottomRightWordPoint != null)){
+                endCursorPoint = lastBottomRightWordPoint;
+            }else {
+                endCursorPoint = mendCursorPoint;
+            }
+        }
+        if(changeLeftMarginPoint){
+            // get top left most point of the top left most word in image
+            //leftMarginRulerPoint.x = allWordStartPoints.get(0).x;
+            leftMarginRulerPoint.x = mleftMarginPoint.x;
+        }
+        if(changeRightMarginPoint){
+            // get bottom right most point of the bottom right most word in image
+            //rightMarginRulerPoint.x = allWordEndPoints.get(0).x;
+            rightMarginRulerPoint.x = mrightMarginPoint.x;
+        }
+        Paint paint = new Paint();
+        if(debugMode) {
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(2);
+            paint.setPathEffect(new DashPathEffect(new float[]{2, 2}, 0));
+            paint.setColor(Color.GREEN);
+            paint.setAntiAlias(true);
+            //canvas.drawLine(innerCursorAreaRect.left, innerCursorAreaRect.top, innerCursorAreaRect.right, innerCursorAreaRect.top, paint);
+            canvas.drawRect(innerCursorAreaRect, paint);
+        }
+        paintCursors(canvas);
+
+        //Paint paint = new Paint();
+        /*paint.setStyle(Paint.Style.FILL);
+        paint.setColor(Color.BLUE);
+        paint.setAntiAlias(true);
+        canvas.drawCircle(startCursorPoint.x, startCursorPoint.y, 30, paint);
+        canvas.drawCircle(endCursorPoint.x, endCursorPoint.y, 30, paint);
+*/
+        if(showMargins) {
+            // Draw margin rulers
+            paint.setColor(Color.GREEN);
+            canvas.drawLine(leftMarginRulerPoint.x, 0, leftMarginRulerPoint.x, loriginalImageHeight, paint);
+            canvas.drawCircle(leftMarginRulerPoint.x, loriginalImageHeight / 2, 30, paint);
+            canvas.drawLine(rightMarginRulerPoint.x, 0, rightMarginRulerPoint.x, loriginalImageHeight, paint);
+            canvas.drawCircle(rightMarginRulerPoint.x, loriginalImageHeight / 2, 30, paint);
+        }
+
+        if(debugMode && (loriginalImageHeight/loriginalImageWidth) > 1.3) {
+            // Draw Zoomed area
+            // Zoomed area is depending on aspect ratio of the image and device - portrait or landscape
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(2);
+            paint.setPathEffect(new DashPathEffect(new float[]{2, 2}, 0));
+            paint.setColor(Color.GRAY);
+            //Log.d(TAG, "agytr selectWordInBetweenCursors: zoomedOffsetY "+zoomedOffsetY+" heightZoomFactor "+heightZoomFactor+" loriginalImageWidth "+loriginalImageWidth + " loriginalImageHeight "+loriginalImageHeight+" loriginalImageWidth/loriginalImageWidth "+(loriginalImageWidth/loriginalImageHeight));
+            //Log.d(TAG, "selectWordInBetweenCursors: (loriginalImageHeight/loriginalImageWidth) "+(loriginalImageHeight/loriginalImageWidth));
+            Rect zoomedAreaRect = new Rect(zoomedOffsetX, zoomedOffsetY, zoomedOffsetX + (int) (loriginalImageWidth / widthZoomFactor), zoomedOffsetY + (int) (loriginalImageHeight / heightZoomFactor));
+            //Rect zoomedAreaRect = new Rect(0, zoomedOffsetY,(int)loriginalImageWidth,zoomedOffsetY+(int)(loriginalImageHeight/heightZoomFactor));
+            canvas.drawRect(zoomedAreaRect, paint);
+        }
+
+        TouchImageView.super.setImageBitmap(originalBitmap);
+        TouchImageView.super.setContentDescription(TextUtils.join(" ", selectedVisionText));
+        if(mListener != null) {
+            mListener.onEvent();
+        }
+        textSelectionInProgress = false;
+    }
+
+
+
+    private void selectWordOnTouch(int touchX, int touchY, boolean longPressMode) {
+        List<ImageView> ivs = new ArrayList<>();
+
+        if (mContext instanceof MainActivity) {
+            MainActivity activity = (MainActivity) mContext;
+            ivs = new ArrayList<>(Arrays.asList(
+                    activity.findViewById(R.id.f),
+                    activity.findViewById(R.id.highlight),
+                    activity.findViewById(R.id.add_highlight),
+                    activity.findViewById(R.id.delete_highlight)
+            ));
+        } else {
+            Log.e("TouchImageView", "selectWordOnTouch: mContext is not MainActivity. It is: " + mContext.getClass().getSimpleName());
+            return; // or handle it gracefully
+        }
+
+        try {
+
+
+            if(selectedVisionTextRectanglesSimplified.size()==1) {
+                for (final VisionWordModel visionWordModel : selectedVisionTextRectanglesSimplified) {
+
+
+                    new Thread() {
+                        @Override
+                        public void run() {
+
+                            dao = MainActivity.db.getImagesDao();
+
+                            List<Images>image=dao.getDetails(
+
+                                    visionWordModel.mrect.top,
+
+                                    visionWordModel.mrect.bottom,
+                                    visionWordModel.mrect.left,
+                                    visionWordModel.mrect.right,
+                                    MainActivity.currentUri
+                            );
+                        }
+                    }.start();
+
+                }
+            }
+
+
+        boolean foundWord = false;
+        int zoomedTouchX = zoomedOffsetX+(int)(touchX/widthZoomFactor);
+        int zoomedTouchY = zoomedOffsetY+(int)(touchY/heightZoomFactor);
+        if(heightZoomFactor <= 1){
+            zoomedTouchY = touchY - zoomedOffsetY;
+        }
+        //final float fzoomedTouchX = zoomedTouchX;
+        final float fzoomedTouchY = zoomedTouchY;
+        if(widthZoomFactor <= 1){
+            zoomedTouchX = touchX - zoomedOffsetX;
+        }
+        /*Log.d(TAG, "qaz onLongPress: zoomedOffsetX "+zoomedOffsetX);
+        Log.d(TAG, "qaz onLongPress: zoomedOffsetY "+zoomedOffsetY);
+        Log.d(TAG, "mnop onLongPress: touchX "+touchX);
+        Log.d(TAG, "mnop onLongPress: touchY "+touchY);
+        Log.d(TAG, "mnop onLongPress: zoomedTouchX "+zoomedTouchX);
+        Log.d(TAG, "mnop onLongPress: zoomedTouchY "+zoomedTouchY);
+
+        //Log.d(TAG, "onLongPress: MotionEvent.ACTION_UP visionTextRectangles size "+visionTextRectangles.size());
+        //Iterator it = visionTextRectangles.entrySet().iterator();
+        Log.d(TAG, "wqw onLongPress: lscaledImageWidth "+lscaledImageWidth);
+        Log.d(TAG, "wqw onLongPress: lscaledImageHeight "+lscaledImageHeight);*/
+
+        final Bitmap originalBitmap;
+        if(longPressMode){
+            originalBitmap = unChangedOriginalBitmap.copy(unChangedOriginalBitmap.getConfig(), true);
+        }else {
+            originalBitmap = ((BitmapDrawable) TouchImageView.super.getDrawable()).getBitmap();
+        }
+        Canvas canvas = new Canvas(originalBitmap);
+        List<VisionWordModel> filteredVisionWordList = visionTextRectanglesSimplified;
+        if (Build.VERSION.SDK_INT >= VERSION_CODES.N) {
+            if(zoomedVisionTextRectangles.size() <= 0 && visionTextRectanglesSimplified.size() >= 1){
+                zoomedVisionTextRectangles = visionTextRectanglesSimplified;
+            }
+            filteredVisionWordList = zoomedVisionTextRectangles.stream().filter(filteredVisionWord -> (filteredVisionWord.getTop() >= fzoomedTouchY - filteredVisionWord.getHeight() && filteredVisionWord.getTop() <= fzoomedTouchY + filteredVisionWord.getHeight() )).collect(Collectors.toList());
+        }
+        //Log.d(TAG, "selectWordOnTouch: filteredVisionWordList size "+filteredVisionWordList.size() + " fzoomedTouchY "+ fzoomedTouchY);
+        //Log.d(TAG, "mhgfer selectWordOnTouch: size "+filteredVisionWordList.size());
+        for (VisionWordModel visionWordModel : filteredVisionWordList) {
+        //while (it.hasNext()) {
+            //Map.Entry pair = (Map.Entry)it.next();
+            Rect rect = visionWordModel.mrect;
+            // TODO: Threshold based on zoom factor
+            int threshold = 5;
+            if(checkRectangleMatch( rect,  zoomedTouchX,  zoomedTouchY)){
+                foundWord = true;
+                //   Log.d(TAG, "selectWordOnTouch: checkRectangleMatch");
+                // }
+                // if(rect.contains(zoomedTouchX,zoomedTouchY) || rect.contains(zoomedTouchX - threshold,zoomedTouchY - threshold) || rect.contains(zoomedTouchX + threshold,zoomedTouchY + threshold)){
+                //Log.d(TAG, "qaz selectWordOnTouch: getLayoutParams "+mivStartCursor.getLayoutParams().toString());
+
+                // Toggle
+
+
+
+                if(selectedVisionTextRectanglesSimplified.contains(visionWordModel)){
+
+                    Toast.makeText(mContext, " removed "+visionWordModel.mtext , Toast.LENGTH_SHORT).show();
+
+                    for(ImageView iv:ivs) {
+                        iv.setImageDrawable(null);
+                    }
+                    ((EditText)((MainActivity) mContext).findViewById(R.id.et)).setText("");
+
+                    // Remove - draw Yellow
+                    //int pos = selectedVisionTextRectangles.indexOf(rect);
+                    //Log.d(TAG, "already clicked rectangle: "+pair.getValue() + " rect: "+ rect.toShortString());
+                    selectedVisionTextRectanglesSimplified.remove(visionWordModel);
+                    //selectedVisionText.remove(pos);
+                    Paint paint = new Paint();
+                    paint.setStyle(Paint.Style.STROKE);
+                    paint.setStrokeWidth(2);
+                    paint.setPathEffect(new DashPathEffect(new float[]{2, 2}, 0));
+                    paint.setColor(Color.YELLOW);
+                    paint.setAntiAlias(true);
+
+                    //canvas.drawBitmap(originalBitmap, 0, 0, paint);
+                    //canvas.drawText("Testing...", 10, 10, paint);
+                    canvas.drawRect(rect, paint);
+                }else {
+                    Toast.makeText(mContext, " Added "+visionWordModel.mtext , Toast.LENGTH_SHORT).show();
+
+
+                    for(ImageView iv:ivs) {
+                        iv.setImageDrawable(null);
+                    }
+                    ((EditText)((MainActivity) mContext).findViewById(R.id.et)).setText("");
+
+                    if(visionTextRectanglesSimplified.contains(visionWordModel)) {
+                        //check if visonwordmodel has note and color
+                        //if it has note display note
+                        //if it has color highlight appropriate color button with remove drawable
+                        for(MainActivity.MyVisionWordModel vwm:savedRects){
+                            if(visionWordModel.equals(mContext,(VisionWordModel)vwm)){
+                                try {
+                                    if(vwm.color!=null) {
+                                        if(!vwm.color.equals("#00000000")){
+                                            if(!vwm.color.equals("")){
+                                                for(ImageView iv:ivs){
+                                                    iv.setImageDrawable(null);
+                                                    if(iv.getTag().equals(vwm.color.replaceFirst("CC",""))){
+                                                        ((MainActivity)mContext).recentHighlight=iv.getId();
+                                                        iv.setImageDrawable(getResources().getDrawable(R.drawable.ic_clear));
+                                                    }
+
+                                                }
+                                                //invalidate();
+
+                                            }
+                                        }
+                                    }
+                                    if(vwm.note!=null) {
+                                        ((EditText)((MainActivity) mContext).findViewById(R.id.et)).setText(vwm.note);
+                                    }
+                                }
+                                catch (Exception e){
+                                    Toast.makeText(mContext,e.toString()
+                                            ,Toast.LENGTH_LONG).show();
+                                }
+                            }
+
+                        }
+
+                    }
+
+
+                    //Add - Draw Red
+                    //selectedVisionTextRectangles.add(rect);
+                    //selectedVisionText.add(visionWordModel.mtext);
+                    selectedVisionTextRectanglesSimplified.add(visionWordModel);
+
+                    // Initialize a new Paint instance to draw the Rectangle
+                    Paint paint = new Paint();
+                    paint.setStyle(Paint.Style.STROKE);
+                    paint.setStrokeWidth(2);
+                    paint.setPathEffect(new DashPathEffect(new float[]{2, 2}, 0));
+                    paint.setColor(Color.RED);
+                    paint.setAntiAlias(true);
+
+                    //canvas.drawBitmap(originalBitmap, 0, 0, paint);
+                    //canvas.drawText("Testing...", 10, 10, paint);
+                    canvas.drawRect(rect, paint);
+
+                    if(longPressMode) {
+
+                        //canvas.drawCircle(rect.left, rect.bottom, 30, paint);
+                        startCursorPoint.x = rect.left;
+                        startCursorPoint.y = rect.top;
+                        //canvas.drawCircle(rect.right, rect.bottom, 30, paint);
+                        endCursorPoint.x = rect.right;
+                        endCursorPoint.y = rect.bottom;
+                        paintCursors(canvas);
+
+
+                        leftMarginRulerPoint.x = 30;
+                        leftMarginRulerPoint.y = loriginalImageHeight / 2;
+                        rightMarginRulerPoint.x = loriginalImageWidth - 30;
+                        rightMarginRulerPoint.y = loriginalImageHeight / 2;
+                        if(showMargins) {
+                            // Draw margin rulers
+                            paint.setColor(Color.GREEN);
+                            canvas.drawLine(leftMarginRulerPoint.x, 0, leftMarginRulerPoint.x, loriginalImageHeight, paint);
+                            canvas.drawCircle(leftMarginRulerPoint.x, loriginalImageHeight / 2, 30, paint);
+                            canvas.drawLine(rightMarginRulerPoint.x, 0, rightMarginRulerPoint.x, loriginalImageHeight, paint);
+                            canvas.drawCircle(rightMarginRulerPoint.x, loriginalImageHeight / 2, 30, paint);
+                        }
+
+                    }
+                }
+                TouchImageView.super.setImageBitmap(originalBitmap);
+                if(!longPressMode){
+                    Collections.sort(selectedVisionTextRectanglesSimplified, new Comparator<VisionWordModel>() {
+                        @Override
+                        public int compare(VisionWordModel p1, VisionWordModel p2) {
+                            // Ascending first left as same line words can have top +/- 5
+                            int threshold = minWordHeight;
+                            int c = 0;
+                            if((p1.mrect.top < p2.mrect.top + threshold) && (p1.mrect.top < p2.mrect.top - threshold)){
+                                c = -1;
+                            }else if((p1.mrect.top > p2.mrect.top + threshold) && (p1.mrect.top > p2.mrect.top - threshold)){
+                                c = 1;
+                            }
+                            if (c == 0)
+                                c = Double.compare(p1.mrect.left, p2.mrect.left);
+                            return c;
+                        }
+                    });
+                }
+                List<String> selectedVisionText = new ArrayList<>();
+                if (Build.VERSION.SDK_INT >= VERSION_CODES.N) {
+                    selectedVisionText =
+                            selectedVisionTextRectanglesSimplified.stream()
+                                    .map(VisionWordModel::getText)
+                                    .collect(Collectors.toList());
+                }else{
+                    for (VisionWordModel visionWordModelx : selectedVisionTextRectanglesSimplified) {
+                        selectedVisionText.add(visionWordModelx.mtext);
+                    }
+                }
+                //Toast.makeText(mContext, TextUtils.join(" ", selectedVisionText), Toast.LENGTH_SHORT).show();
+                TouchImageView.super.setContentDescription(TextUtils.join(" ", selectedVisionText));
+                //ivImage.invalidate();
+                //et_image_text.setText(TextUtils.join(" ", selectedVisionText));
+                //et_image_text.setSelectAllOnFocus(true);
+                //et_image_text.setText(et_image_text.getText()+" "+pair.getValue().toString());
+                if(mListener != null) {
+                    mListener.onEvent();
+                }
+                break;
+            }else{
+                //Log.d(TAG, pair.getValue()+" onLongPress: not match (int)touchX,(int)touchY) "+(int)touchX+" Y: "+(int)touchY+" rect: left "+rect.left+" top "+rect.top+" right "+rect.right+" bottom "+rect.bottom);
+                //Log.d(TAG, pair.getValue()+" onLongPress: not match (int)zoomedTouchX,(int)zoomedTouchY) "+(int)zoomedTouchX+" Y: "+(int)zoomedTouchY+" rect: left "+rect.left+" top "+rect.top+" right "+rect.right+" bottom "+rect.bottom);
+            }
+            //System.out.println(pair.getKey() + " = " + pair.getValue());
+            //it.remove(); // avoids a ConcurrentModificationException
+        }
+        if(!foundWord && longPressMode){
+            // Initialize a new Paint instance to draw the Rectangle
+            Paint paint = new Paint();
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(Color.RED);
+            paint.setAntiAlias(true);
+
+            //canvas.drawCircle(touchX, touchY, 30, paint);
+            startCursorPoint.x = touchX;
+            startCursorPoint.y = touchY;
+            //canvas.drawCircle(touchX + 100, touchY, 30, paint);
+            endCursorPoint.x = touchX + 100;
+            endCursorPoint.y = touchY;
+            paintCursors(canvas);
+        }
+        //Log.d(TAG, "onLongPress: visionTextRectangles size "+visionTextRectangles.size());
+
+
+
+
+
+        }catch (Exception e){
+            Toast.makeText(mContext,e.toString(),Toast.LENGTH_LONG).show();
+        }
+        catch (Error e){
+            Toast.makeText(mContext,e.toString(),Toast.LENGTH_LONG).show();
+        }
+        catch (Throwable e){
+            Toast.makeText(mContext,e.toString(),Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void paintCursors(Canvas canvas){
+        int threshold = 30;
+        int radius = 20;
+        Paint paint = new Paint();
+        paint.setStyle(Paint.Style.FILL_AND_STROKE);
+        paint.setColor(Color.BLUE);
+        paint.setAntiAlias(true);
+
+        PointF point1_draw = new PointF(startCursorPoint.x, startCursorPoint.y);
+        PointF point2_draw = new PointF(startCursorPoint.x -threshold, startCursorPoint.y);
+        PointF point3_draw = new PointF(startCursorPoint.x, startCursorPoint.y-threshold);
+
+        android.graphics.Path path = new android.graphics.Path();
+        path.setFillType(android.graphics.Path.FillType.EVEN_ODD);
+        path.moveTo(point1_draw.x,point1_draw.y);
+        path.lineTo(point2_draw.x,point2_draw.y);
+        path.lineTo(point3_draw.x,point3_draw.y);
+        path.lineTo(point1_draw.x,point1_draw.y);
+        path.close();
+
+        canvas.drawPath(path, paint);
+
+        point1_draw = new PointF(endCursorPoint.x, endCursorPoint.y);
+        point2_draw = new PointF(endCursorPoint.x +threshold, endCursorPoint.y);
+        point3_draw = new PointF(endCursorPoint.x, endCursorPoint.y+threshold);
+
+        path = new android.graphics.Path();
+        path.setFillType(android.graphics.Path.FillType.EVEN_ODD);
+        path.moveTo(point1_draw.x,point1_draw.y);
+        path.lineTo(point2_draw.x,point2_draw.y);
+        path.lineTo(point3_draw.x,point3_draw.y);
+        path.lineTo(point1_draw.x,point1_draw.y);
+        path.close();
+
+        canvas.drawPath(path, paint);
+        canvas.drawCircle(startCursorPoint.x - radius, startCursorPoint.y - radius, radius, paint);
+        canvas.drawCircle(endCursorPoint.x +radius, endCursorPoint.y+radius, radius, paint);
+    }
+
+    private boolean checkSameLineWords(List<Integer> allWordTopPositions, int top) {
+        // allWordBottomPositions[283, 281,
+        int threshold = minWordHeight;
+        for (int i=0; i<=threshold; i++) {
+            if (allWordTopPositions.contains(top+i)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public boolean checkRectangleMatch(Rect rect, int zoomedTouchX, int zoomedTouchY) {
+        int threshold = 5;
+        int[] possibleListX = new int[] {zoomedTouchX, zoomedTouchX - threshold, zoomedTouchX + threshold};
+        int[] possibleListY = new int[] {zoomedTouchY, zoomedTouchY - threshold, zoomedTouchY + threshold};
+        for (int i=0; i<possibleListX.length; i++) {
+            for (int j=0; j<possibleListY.length; j++) {
+                if (rect.contains(possibleListX[i], possibleListY[j])) {
+                    //Log.d(TAG, "selectWordOnTouch: rect.contains(zoomedTouchX,zoomedTouchY) i "+ i +" j "+j);
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+}
