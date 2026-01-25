@@ -285,6 +285,28 @@
                             android:checked="false" />
                     </LinearLayout>
 
+                    <!-- 句末终止分隔符开关 -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:layout_marginBottom="12dp">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="句末终止分隔符"
+                            android:textSize="14sp" />
+
+                        <Switch
+                            android:id="@+id/sw_sentence_end_terminator"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:checked="true" />
+                    </LinearLayout>
+                    
                     <!-- 横向重叠度阈值滑动条 -->
                     <LinearLayout
                         android:layout_width="match_parent"

@@ -66,6 +66,7 @@ public class MainActivity extends AppCompatActivity {
     private TextView tvHorizontalDistanceThreshold;
     private double horizontalDistanceThreshold = 0.5;
     private Switch swVerticalMerge;
+    private Switch swSentenceEndTerminator;
     private SeekBar sbHorizontalOverlapThreshold;
     private TextView tvHorizontalOverlapThreshold;
     private double horizontalOverlapThreshold = 0.5;
@@ -360,6 +361,7 @@ public class MainActivity extends AppCompatActivity {
         sbHorizontalDistanceThreshold = findViewById(R.id.sb_horizontal_distance_threshold);
         tvHorizontalDistanceThreshold = findViewById(R.id.tv_horizontal_distance_threshold);
         swVerticalMerge = findViewById(R.id.sw_vertical_merge);
+        swSentenceEndTerminator = findViewById(R.id.sw_sentence_end_terminator);
         sbHorizontalOverlapThreshold = findViewById(R.id.sb_horizontal_overlap_threshold);
         tvHorizontalOverlapThreshold = findViewById(R.id.tv_horizontal_overlap_threshold);
         sbVerticalDistanceThreshold = findViewById(R.id.sb_vertical_distance_threshold);
@@ -946,6 +948,33 @@ public class MainActivity extends AppCompatActivity {
                 
                 Point[] currentBox = current.getDtBoxes();
                 Point[] nextBox = next.getDtBoxes();
+                
+                // 检查句末终止分隔符开关
+                if (swSentenceEndTerminator.isChecked()) {
+                    // 获取上方框的文本
+                    RecResult upperBox, lowerBox;
+                    if (getBoxTop(currentBox) < getBoxTop(nextBox)) {
+                        upperBox = current;
+                        lowerBox = next;
+                    } else {
+                        upperBox = next;
+                        lowerBox = current;
+                    }
+                    
+                    // 检查上方框文本是否以句末终止符结尾
+                    String upperText = upperBox.getText().trim();
+                    if (!upperText.isEmpty()) {
+                        char lastChar = upperText.charAt(upperText.length() - 1);
+                        // 定义句末终止分隔符列表
+                        if (",.!?;:。！？；：".indexOf(lastChar) >= 0) {
+                            // 如果上方框文本以句末终止符结尾，不合并，直接标记为最终框
+                            upperBox.setFinalBox(true);
+                            lowerBox.setFinalBox(true);
+                            i++;
+                            continue;
+                        }
+                    }
+                }
                 
                 // 计算框的高度
                 double currentHeight = getBoxBottom(currentBox) - getBoxTop(currentBox);
