@@ -728,8 +728,11 @@ public class MainActivity extends AppCompatActivity {
         // 检查是否有垂直重叠
         boolean verticalOverlap = !(box1Bottom < box2Top || box2Bottom < box1Top);
         
-        // 检查是否水平相邻（box1在box2的左侧，且间距不超过box1宽度乘以水平距离阈值）
-        double maxGap = getBoxWidth(box1) * horizontalDistanceThreshold;
+        // 检查是否水平相邻（box1在box2的左侧，且间距不超过两个框平均宽度乘以水平距离阈值）
+        double box1Width = getBoxWidth(box1);
+        double box2Width = getBoxWidth(box2);
+        double avgWidth = (box1Width + box2Width) / 2.0;
+        double maxGap = avgWidth * horizontalDistanceThreshold;
         boolean horizontallyClose = box2Left - box1Right <= maxGap;
         
         return verticalOverlap && horizontallyClose;
