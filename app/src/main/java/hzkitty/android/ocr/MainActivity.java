@@ -62,6 +62,9 @@ public class MainActivity extends AppCompatActivity {
     private Switch swHorizontalMerge;
     private SeekBar sbMergeThreshold;
     private TextView tvMergeThreshold;
+    private SeekBar sbHorizontalDistanceThreshold;
+    private TextView tvHorizontalDistanceThreshold;
+    private double horizontalDistanceThreshold = 0.5;
     private RecyclerView rvRecResult;
     private RecResultAdapter recResultAdapter;
     private RapidOCR rapidOCR;
@@ -173,11 +176,35 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 // 将进度值（0-100）转换为阈值（0.0-1.0）
-                float threshold = progress / 100.0f;
+                double threshold = progress / 100.0;
                 tvMergeThreshold.setText(String.format("%.2f", threshold));
                 
-                // 当滑动条值改变时，重新处理当前的OCR结果
-                if (lastBitmap != null && lastOcrResult != null && swHorizontalMerge.isChecked()) {
+                // 如果有上次的识别结果，重新处理并显示
+                if (lastBitmap != null && lastOcrResult != null) {
+                    updateOcrResultDisplay(lastBitmap, lastOcrResult);
+                }
+            }
+            
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+                // 开始拖动时不需要特殊处理
+            }
+            
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+                // 停止拖动时不需要特殊处理
+            }
+        });
+        
+        // 设置水平距离阈值滑动条的监听器
+        sbHorizontalDistanceThreshold.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                // 将进度值（0-100）转换为阈值（0.0-1.0）
+                horizontalDistanceThreshold = progress / 100.0;
+                tvHorizontalDistanceThreshold.setText(String.format("%.2f", horizontalDistanceThreshold));
+                // 如果有上次的识别结果，重新处理并显示
+                if (lastBitmap != null && lastOcrResult != null) {
                     updateOcrResultDisplay(lastBitmap, lastOcrResult);
                 }
             }
@@ -210,6 +237,8 @@ public class MainActivity extends AppCompatActivity {
         swHorizontalMerge = findViewById(R.id.sw_horizontal_merge);
         sbMergeThreshold = findViewById(R.id.sb_merge_threshold);
         tvMergeThreshold = findViewById(R.id.tv_merge_threshold);
+        sbHorizontalDistanceThreshold = findViewById(R.id.sb_horizontal_distance_threshold);
+        tvHorizontalDistanceThreshold = findViewById(R.id.tv_horizontal_distance_threshold);
     }
 
     /**
@@ -699,8 +728,8 @@ public class MainActivity extends AppCompatActivity {
         // 检查是否有垂直重叠
         boolean verticalOverlap = !(box1Bottom < box2Top || box2Bottom < box1Top);
         
-        // 检查是否水平相邻（box1在box2的左侧，且间距不超过box1宽度的一半）
-        double maxGap = getBoxWidth(box1) * 0.5;
+        // 检查是否水平相邻（box1在box2的左侧，且间距不超过box1宽度乘以水平距离阈值）
+        double maxGap = getBoxWidth(box1) * horizontalDistanceThreshold;
         boolean horizontallyClose = box2Left - box1Right <= maxGap;
         
         return verticalOverlap && horizontallyClose;

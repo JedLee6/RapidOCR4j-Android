@@ -102,6 +102,53 @@
                         android:paddingTop="8dp"
                         android:lineSpacingExtra="4sp" />
                 </LinearLayout>
+
+                <!-- 水平距离阈值滑动条 -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:layout_marginTop="12dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="水平距离阈值"
+                            android:textSize="14sp" />
+
+                        <TextView
+                            android:id="@+id/tv_horizontal_distance_threshold"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="0.5"
+                            android:textSize="14sp"
+                            android:textColor="@android:color/holo_blue_dark"
+                            android:paddingLeft="8dp" />
+                    </LinearLayout>
+
+                    <SeekBar
+                        android:id="@+id/sb_horizontal_distance_threshold"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:max="100"
+                        android:progress="50" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="水平距离阈值说明：控制文本框水平相邻的判断条件\n- 值越大（接近1.0）：允许的水平间距越大，更多水平相邻框会被合并\n- 值越小（接近0.0）：允许的水平间距越小，只有非常接近的框才会被合并"
+                        android:textSize="12sp"
+                        android:textColor="@android:color/darker_gray"
+                        android:paddingTop="8dp"
+                        android:lineSpacingExtra="4sp" />
+                </LinearLayout>
             </LinearLayout>
 
             <LinearLayout
