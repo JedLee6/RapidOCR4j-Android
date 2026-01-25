@@ -965,8 +965,9 @@ public class MainActivity extends AppCompatActivity {
                     String upperText = upperBox.getText().trim();
                     if (!upperText.isEmpty()) {
                         char lastChar = upperText.charAt(upperText.length() - 1);
-                        // 定义句末终止分隔符列表
-                        if (",.!?;:。！？；：".indexOf(lastChar) >= 0) {
+                        // 定义句末终止分隔符列表（包含不同语言的句末符号，排除逗号）
+                        // 包括：句号、感叹号、问号、分号中文标点，以及西班牙语的问号/感叹号
+                        if (".!?;。！？；¿¡".indexOf(lastChar) >= 0) {
                             // 如果上方框文本以句末终止符结尾，不合并，直接标记为最终框
                             upperBox.setFinalBox(true);
                             lowerBox.setFinalBox(true);
