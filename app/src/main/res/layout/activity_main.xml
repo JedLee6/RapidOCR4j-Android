@@ -92,6 +92,15 @@
                         android:layout_height="wrap_content"
                         android:max="100"
                         android:progress="50" />
+                        
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="阈值说明：控制文本框合并的严格程度\n- 值越大（接近1.0）：合并条件更严格，只有高度重叠度高的框才会被合并\n- 值越小（接近0.0）：合并条件更宽松，更多相邻框会被合并为一个"
+                        android:textSize="12sp"
+                        android:textColor="@android:color/darker_gray"
+                        android:paddingTop="8dp"
+                        android:lineSpacingExtra="4sp" />
                 </LinearLayout>
             </LinearLayout>
 
