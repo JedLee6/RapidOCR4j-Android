@@ -388,13 +388,16 @@
                             android:id="@+id/sb_vertical_distance_threshold"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:max="100"
-                            android:progress="50" />
+                            android:max="800"
+                            android:progress="250" />
 
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="纵向距离阈值说明：控制纵向框合并的距离条件\n- 值越大（接近1.0）：允许的纵向间距越大，更多纵向相邻框会被合并\n- 值越小（接近0.0）：允许的纵向间距越小，只有非常接近的框才会被合并"
+                            android:text="纵向距离阈值说明：控制纵向框合并的距离条件
+- 值越大（接近6.0）：允许的纵向间距越大，更多纵向相邻框会被合并
+- 值越小（接近-2.0）：允许的纵向间距越小，甚至允许部分重叠的框不合并
+- 负数表示允许框之间有部分重叠也可能不合并"
                             android:textSize="12sp"
                             android:textColor="@android:color/darker_gray"
                             android:paddingTop="8dp"

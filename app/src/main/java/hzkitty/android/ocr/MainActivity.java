@@ -172,8 +172,8 @@ public class MainActivity extends AppCompatActivity {
         sbVerticalDistanceThreshold.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                // 将进度值（0-100）转换为阈值（0.0-1.0）
-                verticalDistanceThreshold = progress / 100.0;
+                // 将进度值（0-800）转换为阈值（-2.0到6.0）
+                verticalDistanceThreshold = (progress / 100.0) - 2.0;
                 tvVerticalDistanceThreshold.setText(String.format("%.2f", verticalDistanceThreshold));
                 // 如果有上次的识别结果，重新处理并显示
                 if (lastBitmap != null && lastOcrResult != null) {
