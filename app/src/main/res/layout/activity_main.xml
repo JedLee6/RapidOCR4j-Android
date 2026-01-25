@@ -155,7 +155,7 @@
                             android:id="@+id/sw_horizontal_merge"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:checked="false" />
+                            android:checked="true" />
                     </LinearLayout>
 
                     <!-- 合并阈值滑动条 -->
@@ -282,7 +282,7 @@
                             android:id="@+id/sw_vertical_merge"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:checked="false" />
+                            android:checked="true" />
                     </LinearLayout>
 
                     <!-- 句末终止分隔符开关 -->
