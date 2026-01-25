@@ -1021,14 +1021,17 @@ public class MainActivity extends AppCompatActivity {
                 boolean leftDiffWithinThreshold = leftDiff <= avgWidth * leftDiffThreshold;
                 
                 // 计算横向重叠度
-                // 计算重叠区域的宽度
-                double overlapWidth = Math.max(0, Math.min(currentRight, nextRight) - Math.max(currentLeft, nextLeft));
+                // 确定哪个框在上方
+                boolean currentOnTop = getBoxTop(currentBox) < getBoxTop(nextBox);
+                
+                // 获取上方框的宽度
+                double topBoxWidth = currentOnTop ? currentWidth : nextWidth;
                 
                 // 计算两个框的最大宽度
                 double maxBoxWidth = Math.max(currentWidth, nextWidth);
                 
-                // 计算重叠度百分比
-                double overlapRatio = maxBoxWidth > 0 ? overlapWidth / maxBoxWidth : 0.0;
+                // 计算重叠度百分比：上方框的宽度在最大宽度的占比
+                double overlapRatio = maxBoxWidth > 0 ? topBoxWidth / maxBoxWidth : 0.0;
                 
                 // 检查横向重叠度是否在阈值内
                 boolean overlapWithinThreshold = overlapRatio >= horizontalOverlapThreshold;

@@ -347,7 +347,7 @@
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="横向重叠度阈值说明：控制纵向框合并的横向重叠条件\n- 值越大（接近1.0）：要求的横向重叠越大，只有高度重叠的框才会被合并\n- 值越小（接近0.0）：允许的横向重叠越小，即使重叠较少的框也会被合并"
+                            android:text="横向重叠度阈值说明：控制纵向框合并的横向条件\n- 值越大（接近1.0）：要求上方框的宽度占最大宽度比例越大，只有宽度接近的框才会被合并\n- 值越小（接近0.0）：允许上方框的宽度占最大宽度比例越小，即使宽度差异较大的框也会被合并"
                             android:textSize="12sp"
                             android:textColor="@android:color/darker_gray"
                             android:paddingTop="8dp"
