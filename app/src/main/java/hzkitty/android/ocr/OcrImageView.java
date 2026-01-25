@@ -119,19 +119,7 @@ public class OcrImageView extends RelativeLayout {
      * 初始化手势检测器，用于检测长按事件
      */
     private void initGestureDetector() {
-        mGestureDetector = new GestureDetector(getContext(), new GestureDetector.SimpleOnGestureListener() {
-            @Override
-            public void onLongPress(MotionEvent e) {
-                int touchX = (int) e.getX();
-                int touchY = (int) e.getY();
-                
-                // 清除之前的选择
-                mSelectedWordModels.clear();
-                
-                // 长按模式下选择单词
-                selectWordOnTouch(touchX, touchY, true);
-            }
-        });
+        mGestureDetector = new GestureDetector(getContext(), new LongPressGestureListener());
         
         // 设置触摸监听器
         setOnTouchListener(new OnTouchListener() {
@@ -159,40 +147,47 @@ public class OcrImageView extends RelativeLayout {
                             // 请求父视图不要拦截触摸事件
                             getParent().requestDisallowInterceptTouchEvent(true);
                             
-                            // 检查是否拖拽的是开始marker
+                            // 检查是否拖拽的是开始marker（+号）
                             if (isMarkerTouched(mStartCursorPoint, touchX, touchY)) {
+                                // 允许拖拽开始marker（+号）
                                 mStartCursorPoint.x = touchX;
                                 mStartCursorPoint.y = touchY;
                                 updateSelectionOnMove();
                                 return true;
                             }
-                            // 检查是否拖拽的是结束marker
+                            // 检查是否拖拽的是结束marker（-号）
                             else if (isMarkerTouched(mEndCursorPoint, touchX, touchY)) {
+                                // 允许拖拽结束marker（-号）
                                 mEndCursorPoint.x = touchX;
                                 mEndCursorPoint.y = touchY;
                                 updateSelectionOnMove();
                                 return true;
                             }
-                            // 否则移动整个选择区域
+                            // 如果是新的选择过程（+号固定，只移动-号）
                             else {
-                                float deltaX = touchX - lastTouchX;
-                                float deltaY = touchY - lastTouchY;
-                                mStartCursorPoint.x += deltaX;
-                                mStartCursorPoint.y += deltaY;
-                                mEndCursorPoint.x += deltaX;
-                                mEndCursorPoint.y += deltaY;
+                                // 只移动结束marker（-号）
+                                mEndCursorPoint.x = touchX;
+                                mEndCursorPoint.y = touchY;
                                 updateSelectionOnMove();
                                 lastTouchX = touchX;
                                 lastTouchY = touchY;
                                 return true;
                             }
                         case MotionEvent.ACTION_UP:
-                            // 触摸结束时，允许父视图重新拦截触摸事件
+                            // 触摸结束时，确定结束marker（-号）的最终位置
+                            mEndCursorPoint.x = touchX;
+                            mEndCursorPoint.y = touchY;
+                            updateSelectionOnMove();
+                            // 允许父视图重新拦截触摸事件
                             getParent().requestDisallowInterceptTouchEvent(false);
                             mTextSelectionInProgress = false;
                             break;
                         case MotionEvent.ACTION_CANCEL:
-                            // 触摸取消时，允许父视图重新拦截触摸事件
+                            // 触摸取消时，确定结束marker（-号）的最终位置
+                            mEndCursorPoint.x = touchX;
+                            mEndCursorPoint.y = touchY;
+                            updateSelectionOnMove();
+                            // 允许父视图重新拦截触摸事件
                             getParent().requestDisallowInterceptTouchEvent(false);
                             mTextSelectionInProgress = false;
                             break;
@@ -433,7 +428,6 @@ public class OcrImageView extends RelativeLayout {
      */
     private void selectWordOnTouch(int touchX, int touchY, boolean longPressMode) {
         mLongPressMode = longPressMode;
-        mTextSelectionInProgress = true;
         
         boolean foundWord = false;
         
@@ -448,17 +442,13 @@ public class OcrImageView extends RelativeLayout {
                 // 清除之前的选择
                 mSelectedWordModels.clear();
                 
-                // 添加选中的单词
-                mSelectedWordModels.add(wordModel);
-                
-                // 设置选择器的起始位置
-                if (longPressMode) {
-                    mStartCursorPoint.x = rect.left;
-                    mStartCursorPoint.y = rect.centerY();
-                    mEndCursorPoint.x = rect.right;
-                    mEndCursorPoint.y = rect.centerY();
-                    mTextSelectionInProgress = true;
-                }
+                // 设置选择器的起始位置（+号marker），并固定
+                mStartCursorPoint.x = rect.centerX();
+                mStartCursorPoint.y = rect.centerY();
+                // 结束位置（-号marker）初始化为与开始位置相同
+                mEndCursorPoint.x = mStartCursorPoint.x;
+                mEndCursorPoint.y = mStartCursorPoint.y;
+                mTextSelectionInProgress = true;
                 
                 // 更新UI显示
                 updateSelectionUI();
@@ -467,10 +457,11 @@ public class OcrImageView extends RelativeLayout {
         }
         
         if (!foundWord && longPressMode) {
-            // 如果长按位置没有单词，设置选择器的起始位置
+            // 如果长按位置没有单词，设置选择器的起始位置（+号marker），并固定
             mStartCursorPoint.x = touchX;
             mStartCursorPoint.y = touchY;
-            mEndCursorPoint.x = touchX + 100;
+            // 结束位置（-号marker）初始化为与开始位置相同
+            mEndCursorPoint.x = touchX;
             mEndCursorPoint.y = touchY;
             mTextSelectionInProgress = true;
             
@@ -486,6 +477,33 @@ public class OcrImageView extends RelativeLayout {
         float dx = markerPoint.x - touchX;
         float dy = markerPoint.y - touchY;
         return Math.sqrt(dx * dx + dy * dy) <= MARKER_RADIUS;
+    }
+    
+    /**
+     * 长按手势监听器
+     */
+    private class LongPressGestureListener extends GestureDetector.SimpleOnGestureListener {
+        @Override
+        public void onLongPress(MotionEvent e) {
+            super.onLongPress(e);
+            
+            int touchX = (int) e.getX();
+            int touchY = (int) e.getY();
+            
+            // 检查是否长按到了marker
+            boolean touchedStartMarker = isMarkerTouched(mStartCursorPoint, touchX, touchY);
+            boolean touchedEndMarker = isMarkerTouched(mEndCursorPoint, touchX, touchY);
+            
+            if (touchedStartMarker || touchedEndMarker) {
+                // 如果长按到了marker，进入编辑模式
+                mTextSelectionInProgress = true;
+                // 不需要清除之前的选择，因为只是拖拽marker
+                updateSelectionUI();
+            } else {
+                // 否则开始新的选择
+                selectWordOnTouch(touchX, touchY, true);
+            }
+        }
     }
     
     /**
