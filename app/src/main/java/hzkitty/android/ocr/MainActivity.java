@@ -704,9 +704,9 @@ public class MainActivity extends AppCompatActivity {
         double overlapBottom = Math.min(box1Bottom, box2Bottom);
         double overlapHeight = Math.max(0, overlapBottom - overlapTop);
         
-        // 计算重叠度（取两个框高度的较小值作为分母）
-        double minHeight = Math.min(box1Height, box2Height);
-        return minHeight > 0 ? overlapHeight / minHeight : 0.0;
+        // 计算重叠度（取两个框高度的较大值作为分母，可以解决两个框高度不一致，但重叠度一致的问题）
+        double maxHeight = Math.max(box1Height, box2Height);
+        return maxHeight > 0 ? overlapHeight / maxHeight : 0.0;
     }
     
     // 检查两个框是否水平相邻
