@@ -28,6 +28,7 @@ import java.util.Date;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 
 import hzkitty.android.ocr.adapter.ModelListAdapter;
@@ -37,6 +38,8 @@ import hzkitty.android.ocr.model.OcrModel;
 import io.github.hzkitty.RapidOCR;
 import io.github.hzkitty.entity.OcrResult;
 import io.github.hzkitty.entity.OcrConfig;
+import io.github.hzkitty.entity.RecResult;
+import org.opencv.core.Point;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -56,6 +59,9 @@ public class MainActivity extends AppCompatActivity {
     private Switch swTextVisible;
     private SeekBar sbTextOpacity;
     private Switch swMergeText;
+    private Switch swHorizontalMerge;
+    private SeekBar sbMergeThreshold;
+    private TextView tvMergeThreshold;
     private RecyclerView rvRecResult;
     private RecResultAdapter recResultAdapter;
     private RapidOCR rapidOCR;
@@ -146,24 +152,44 @@ public class MainActivity extends AppCompatActivity {
             public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
                 // 当开关状态改变时，重新处理当前的OCR结果
                 if (lastBitmap != null && lastOcrResult != null) {
-                    // 重新构建识别结果并显示
-                    String ocrText = lastOcrResult.getStrRes();
-                    if (isChecked) {
-                        ocrText = mergeTextSmartly(ocrText);
-                    }
-                    
-                    StringBuilder resultBuilder = new StringBuilder();
-                    resultBuilder.append(getString(R.string.ocr_result)).append("\n")
-                            .append(ocrText)
-                            .append("\n\n")
-                            .append(getString(R.string.time_statistics)).append("\n")
-                            .append(getString(R.string.total_time)).append(String.format("%.2f", lastOcrResult.getElapseTime() * 1000)).append("ms\n")
-                            .append(getString(R.string.detect_time)).append(String.format("%.2f", lastOcrResult.getDetTime() * 1000)).append("ms\n")
-                            .append(getString(R.string.classify_time)).append(String.format("%.2f", lastOcrResult.getClsTime() * 1000)).append("ms\n")
-                            .append(getString(R.string.recognize_time)).append(String.format("%.2f", lastOcrResult.getRecTime() * 1000)).append("ms");
-                    
-                    tvOcrResult.setText(resultBuilder.toString());
+                    updateOcrResultDisplay(lastBitmap, lastOcrResult);
                 }
+            }
+        });
+        
+        // 横向框合并开关的监听器
+        swHorizontalMerge.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                // 当开关状态改变时，重新处理当前的OCR结果
+                if (lastBitmap != null && lastOcrResult != null) {
+                    updateOcrResultDisplay(lastBitmap, lastOcrResult);
+                }
+            }
+        });
+        
+        // 合并阈值滑动条的监听器
+        sbMergeThreshold.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                // 将进度值（0-100）转换为阈值（0.0-1.0）
+                float threshold = progress / 100.0f;
+                tvMergeThreshold.setText(String.format("%.2f", threshold));
+                
+                // 当滑动条值改变时，重新处理当前的OCR结果
+                if (lastBitmap != null && lastOcrResult != null && swHorizontalMerge.isChecked()) {
+                    updateOcrResultDisplay(lastBitmap, lastOcrResult);
+                }
+            }
+            
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+                // 开始拖动时不需要特殊处理
+            }
+            
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+                // 停止拖动时不需要特殊处理
             }
         });
     }
@@ -181,6 +207,9 @@ public class MainActivity extends AppCompatActivity {
         swTextVisible = findViewById(R.id.sw_text_visible);
         sbTextOpacity = findViewById(R.id.sb_text_opacity);
         swMergeText = findViewById(R.id.sw_merge_text);
+        swHorizontalMerge = findViewById(R.id.sw_horizontal_merge);
+        sbMergeThreshold = findViewById(R.id.sb_merge_threshold);
+        tvMergeThreshold = findViewById(R.id.tv_merge_threshold);
     }
 
     /**
@@ -453,6 +482,60 @@ public class MainActivity extends AppCompatActivity {
         return mergedText.toString().trim();
     }
     
+    // 更新OCR结果显示
+    private void updateOcrResultDisplay(Bitmap bitmap, OcrResult ocrResult) {
+        if (ocrResult == null) return;
+        
+        // 构建包含耗时信息的识别结果
+        StringBuilder resultBuilder = new StringBuilder();
+        String ocrText = ocrResult.getStrRes();
+        List<RecResult> recResults = ocrResult.getRecRes();
+        
+        // 如果横向框合并开关开启，执行合并
+        if (swHorizontalMerge.isChecked() && recResults != null && !recResults.isEmpty()) {
+            // 获取阈值
+            float threshold = sbMergeThreshold.getProgress() / 100.0f;
+            // 执行横向框合并
+            List<RecResult> mergedResults = mergeHorizontalBoxes(recResults, threshold);
+            // 重新构建识别文本
+            ocrText = buildMergedText(mergedResults);
+            // 更新识别结果详细信息
+            recResultAdapter.updateData(mergedResults);
+            // 将合并后的结果传递给OcrImageView
+            ivSelectedImage.setOcrResults(mergedResults);
+        } else {
+            // 根据开关状态决定是否智能合并文本
+            if (swMergeText.isChecked()) {
+                ocrText = mergeTextSmartly(ocrText);
+            }
+            // 更新识别结果详细信息
+            if (recResults != null && !recResults.isEmpty()) {
+                recResultAdapter.updateData(recResults);
+            }
+            // 将原始结果传递给OcrImageView
+            ivSelectedImage.setOcrResults(recResults);
+        }
+        
+        resultBuilder.append(getString(R.string.ocr_result)).append("\n")
+                .append(ocrText)
+                .append("\n\n")
+                .append(getString(R.string.time_statistics)).append("\n")
+                .append(getString(R.string.total_time)).append(String.format("%.2f", ocrResult.getElapseTime() * 1000)).append("ms\n")
+                .append(getString(R.string.detect_time)).append(String.format("%.2f", ocrResult.getDetTime() * 1000)).append("ms\n")
+                .append(getString(R.string.classify_time)).append(String.format("%.2f", ocrResult.getClsTime() * 1000)).append("ms\n")
+                .append(getString(R.string.recognize_time)).append(String.format("%.2f", ocrResult.getRecTime() * 1000)).append("ms");
+        
+        // 在文本区域显示识别结果和耗时信息
+        tvOcrResult.setText(resultBuilder.toString());
+        
+        // 更新识别结果详细信息的可见性
+        if (recResults != null && !recResults.isEmpty()) {
+            rvRecResult.setVisibility(View.VISIBLE);
+        } else {
+            rvRecResult.setVisibility(View.GONE);
+        }
+    }
+    
     // 执行OCR识别
     private void performOCR(Bitmap bitmap) {
         // 显示加载状态
@@ -484,38 +567,8 @@ public class MainActivity extends AppCompatActivity {
                         tvOcrResult.setText("识别失败: " + finalException.getMessage());
                     } else {
                         // 识别成功
-
-                        // 构建包含耗时信息的识别结果
-                        StringBuilder resultBuilder = new StringBuilder();
-                        String ocrText = finalOcrResult.getStrRes();
-                        
-                        // 根据开关状态决定是否智能合并文本
-                        if (swMergeText.isChecked()) {
-                            ocrText = mergeTextSmartly(ocrText);
-                        }
-                        
-                        resultBuilder.append(getString(R.string.ocr_result)).append("\n")
-                                .append(ocrText)
-                                .append("\n\n")
-                                .append(getString(R.string.time_statistics)).append("\n")
-                                .append(getString(R.string.total_time)).append(String.format("%.2f", finalOcrResult.getElapseTime() * 1000)).append("ms\n")
-                                .append(getString(R.string.detect_time)).append(String.format("%.2f", finalOcrResult.getDetTime() * 1000)).append("ms\n")
-                                .append(getString(R.string.classify_time)).append(String.format("%.2f", finalOcrResult.getClsTime() * 1000)).append("ms\n")
-                                .append(getString(R.string.recognize_time)).append(String.format("%.2f", finalOcrResult.getRecTime() * 1000)).append("ms");
-                        
-                        // 在文本区域显示识别结果和耗时信息
-                        tvOcrResult.setText(resultBuilder.toString());
-                        
-                        // 更新识别结果详细信息
-                        if (finalOcrResult.getRecRes() != null && !finalOcrResult.getRecRes().isEmpty()) {
-                            recResultAdapter.updateData(finalOcrResult.getRecRes());
-                            rvRecResult.setVisibility(View.VISIBLE);
-                        } else {
-                            rvRecResult.setVisibility(View.GONE);
-                        }
-                        
-                        // 将OCR结果传递给OcrImageView，以便在图片上显示文本框和支持文本选择
-                        ivSelectedImage.setOcrResults(finalOcrResult.getRecRes());
+                        // 更新OCR结果显示
+                        updateOcrResultDisplay(bitmap, finalOcrResult);
                         
                         // 保存当前的识别结果，用于开关切换时重新处理
                         lastBitmap = bitmap;
@@ -527,5 +580,208 @@ public class MainActivity extends AppCompatActivity {
                 }
             });
         }).start();
+    }
+    
+    // 横向合并文本框
+    private List<RecResult> mergeHorizontalBoxes(List<RecResult> recResults, float threshold) {
+        if (recResults == null || recResults.size() <= 1) {
+            return recResults;
+        }
+        
+        // 按顶部坐标排序，大致按行分组
+        List<RecResult> sortedResults = new ArrayList<>(recResults);
+        sortedResults.sort(Comparator.comparingDouble(this::getBoxTop));
+        
+        List<RecResult> mergedResults = new ArrayList<>();
+        List<RecResult> currentLine = new ArrayList<>();
+        currentLine.add(sortedResults.get(0));
+        
+        for (int i = 1; i < sortedResults.size(); i++) {
+            RecResult current = sortedResults.get(i);
+            RecResult lastInLine = currentLine.get(currentLine.size() - 1);
+            
+            // 计算垂直方向的重叠度
+            double verticalOverlap = calculateVerticalOverlap(lastInLine.getDtBoxes(), current.getDtBoxes());
+            
+            // 如果重叠度超过阈值，认为是同一行
+            if (verticalOverlap >= threshold) {
+                currentLine.add(current);
+            } else {
+                // 合并当前行的文本框
+                mergedResults.addAll(mergeLineBoxes(currentLine));
+                // 开始新的一行
+                currentLine.clear();
+                currentLine.add(current);
+            }
+        }
+        
+        // 合并最后一行
+        if (!currentLine.isEmpty()) {
+            mergedResults.addAll(mergeLineBoxes(currentLine));
+        }
+        
+        return mergedResults;
+    }
+    
+    // 合并同一行的文本框
+    private List<RecResult> mergeLineBoxes(List<RecResult> lineBoxes) {
+        if (lineBoxes.size() <= 1) {
+            return lineBoxes;
+        }
+        
+        // 按左侧坐标排序
+        lineBoxes.sort(Comparator.comparingDouble(this::getBoxLeft));
+        
+        List<RecResult> mergedLine = new ArrayList<>();
+        RecResult currentMerge = lineBoxes.get(0);
+        
+        for (int i = 1; i < lineBoxes.size(); i++) {
+            RecResult nextBox = lineBoxes.get(i);
+            
+            // 检查是否可以合并（水平方向连续）
+            if (isHorizontallyAdjacent(currentMerge.getDtBoxes(), nextBox.getDtBoxes())) {
+                // 合并两个文本框
+                currentMerge = mergeTwoBoxes(currentMerge, nextBox);
+            } else {
+                // 添加合并后的文本框，开始新的合并
+                mergedLine.add(currentMerge);
+                currentMerge = nextBox;
+            }
+        }
+        
+        // 添加最后一个合并的文本框
+        mergedLine.add(currentMerge);
+        
+        return mergedLine;
+    }
+    
+    // 计算两个框的垂直重叠度
+    private double calculateVerticalOverlap(Point[] box1, Point[] box2) {
+        if (box1 == null || box2 == null || box1.length < 4 || box2.length < 4) {
+            return 0.0;
+        }
+        
+        // 计算两个框的垂直范围
+        double box1Top = getBoxTop(box1);
+        double box1Bottom = getBoxBottom(box1);
+        double box1Height = box1Bottom - box1Top;
+        
+        double box2Top = getBoxTop(box2);
+        double box2Bottom = getBoxBottom(box2);
+        double box2Height = box2Bottom - box2Top;
+        
+        // 计算重叠区域
+        double overlapTop = Math.max(box1Top, box2Top);
+        double overlapBottom = Math.min(box1Bottom, box2Bottom);
+        double overlapHeight = Math.max(0, overlapBottom - overlapTop);
+        
+        // 计算重叠度（取两个框高度的较小值作为分母）
+        double minHeight = Math.min(box1Height, box2Height);
+        return minHeight > 0 ? overlapHeight / minHeight : 0.0;
+    }
+    
+    // 检查两个框是否水平相邻
+    private boolean isHorizontallyAdjacent(Point[] box1, Point[] box2) {
+        if (box1 == null || box2 == null || box1.length < 4 || box2.length < 4) {
+            return false;
+        }
+        
+        // 获取两个框的水平范围
+        double box1Right = getBoxRight(box1);
+        double box2Left = getBoxLeft(box2);
+        
+        // 获取两个框的垂直范围
+        double box1Top = getBoxTop(box1);
+        double box1Bottom = getBoxBottom(box1);
+        double box2Top = getBoxTop(box2);
+        double box2Bottom = getBoxBottom(box2);
+        
+        // 检查是否有垂直重叠
+        boolean verticalOverlap = !(box1Bottom < box2Top || box2Bottom < box1Top);
+        
+        // 检查是否水平相邻（box1在box2的左侧，且间距不超过box1宽度的一半）
+        double maxGap = getBoxWidth(box1) * 0.5;
+        boolean horizontallyClose = box2Left - box1Right <= maxGap;
+        
+        return verticalOverlap && horizontallyClose;
+    }
+    
+    // 合并两个文本框
+    private RecResult mergeTwoBoxes(RecResult box1, RecResult box2) {
+        Point[] dtBoxes1 = box1.getDtBoxes();
+        Point[] dtBoxes2 = box2.getDtBoxes();
+        
+        // 计算合并后的边界框
+        double left = Math.min(getBoxLeft(dtBoxes1), getBoxLeft(dtBoxes2));
+        double top = Math.min(getBoxTop(dtBoxes1), getBoxTop(dtBoxes2));
+        double right = Math.max(getBoxRight(dtBoxes1), getBoxRight(dtBoxes2));
+        double bottom = Math.max(getBoxBottom(dtBoxes1), getBoxBottom(dtBoxes2));
+        
+        // 创建新的边界框（左上、右上、右下、左下）
+        Point[] mergedBox = new Point[4];
+        mergedBox[0] = new Point(left, top);
+        mergedBox[1] = new Point(right, top);
+        mergedBox[2] = new Point(right, bottom);
+        mergedBox[3] = new Point(left, bottom);
+        
+        // 合并文本
+        String mergedText = box1.getText() + " " + box2.getText();
+        
+        // 使用两个框的平均置信度
+        float mergedConfidence = (box1.getConfidence() + box2.getConfidence()) / 2;
+        
+        // 创建合并后的RecResult
+        return new RecResult(mergedBox, mergedText, mergedConfidence, null);
+    }
+    
+    // 获取框的左侧坐标
+    private double getBoxLeft(RecResult result) {
+        return getBoxLeft(result.getDtBoxes());
+    }
+    
+    private double getBoxLeft(Point[] box) {
+        if (box == null || box.length < 4) return 0;
+        return Math.min(Math.min(box[0].x, box[1].x), Math.min(box[2].x, box[3].x));
+    }
+    
+    // 获取框的右侧坐标
+    private double getBoxRight(Point[] box) {
+        if (box == null || box.length < 4) return 0;
+        return Math.max(Math.max(box[0].x, box[1].x), Math.max(box[2].x, box[3].x));
+    }
+    
+    // 获取框的顶部坐标
+    private double getBoxTop(RecResult result) {
+        return getBoxTop(result.getDtBoxes());
+    }
+    
+    private double getBoxTop(Point[] box) {
+        if (box == null || box.length < 4) return 0;
+        return Math.min(Math.min(box[0].y, box[1].y), Math.min(box[2].y, box[3].y));
+    }
+    
+    // 获取框的底部坐标
+    private double getBoxBottom(Point[] box) {
+        if (box == null || box.length < 4) return 0;
+        return Math.max(Math.max(box[0].y, box[1].y), Math.max(box[2].y, box[3].y));
+    }
+    
+    // 获取框的宽度
+    private double getBoxWidth(Point[] box) {
+        return getBoxRight(box) - getBoxLeft(box);
+    }
+    
+    // 根据合并后的RecResult构建识别文本
+    private String buildMergedText(List<RecResult> mergedResults) {
+        if (mergedResults == null || mergedResults.isEmpty()) {
+            return "";
+        }
+        
+        StringBuilder textBuilder = new StringBuilder();
+        for (RecResult result : mergedResults) {
+            textBuilder.append(result.getText()).append("\n");
+        }
+        
+        return textBuilder.toString().trim();
     }
 }
