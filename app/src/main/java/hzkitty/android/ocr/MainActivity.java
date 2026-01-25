@@ -362,6 +362,17 @@ public class MainActivity extends AppCompatActivity {
         tvHorizontalDistanceThreshold = findViewById(R.id.tv_horizontal_distance_threshold);
         swVerticalMerge = findViewById(R.id.sw_vertical_merge);
         swSentenceEndTerminator = findViewById(R.id.sw_sentence_end_terminator);
+        
+        // 为句末终止分隔符开关添加监听器
+        swSentenceEndTerminator.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                // 开关状态变更时重新处理并显示
+                if (lastBitmap != null && lastOcrResult != null) {
+                    updateOcrResultDisplay(lastBitmap, lastOcrResult);
+                }
+            }
+        });
         sbHorizontalOverlapThreshold = findViewById(R.id.sb_horizontal_overlap_threshold);
         tvHorizontalOverlapThreshold = findViewById(R.id.tv_horizontal_overlap_threshold);
         sbVerticalDistanceThreshold = findViewById(R.id.sb_vertical_distance_threshold);
@@ -650,6 +661,13 @@ public class MainActivity extends AppCompatActivity {
         StringBuilder resultBuilder = new StringBuilder();
         String ocrText = ocrResult.getStrRes();
         List<RecResult> recResults = ocrResult.getRecRes();
+        
+        // 重置所有框的isFinalBox为false
+        if (recResults != null && !recResults.isEmpty()) {
+            for (RecResult result : recResults) {
+                result.setFinalBox(false);
+            }
+        }
         
         // 如果横向框合并开关开启，执行合并
         if (swHorizontalMerge.isChecked() && recResults != null && !recResults.isEmpty()) {
