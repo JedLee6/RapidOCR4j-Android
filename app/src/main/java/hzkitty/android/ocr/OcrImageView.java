@@ -125,26 +125,21 @@ public class OcrImageView extends RelativeLayout {
         setOnTouchListener(new OnTouchListener() {
             @Override
             public boolean onTouch(View v, MotionEvent event) {
-                if (event.getAction() == MotionEvent.ACTION_DOWN) {
-                    lastTouchX = event.getX();
-                    lastTouchY = event.getY();
-                    // 当触摸开始时，请求父视图不要拦截触摸事件
-                    getParent().requestDisallowInterceptTouchEvent(true);
-                }
-                
-                // 将触摸事件传递给手势检测器
-                if (mGestureDetector.onTouchEvent(event)) {
-                    return true;
-                }
-                
                 int touchX = (int) event.getX();
                 int touchY = (int) event.getY();
                 
-                // 处理选择器的拖拽
-                if (mTextSelectionInProgress) {
-                    switch (event.getAction()) {
-                        case MotionEvent.ACTION_MOVE:
-                            // 请求父视图不要拦截触摸事件
+                switch (event.getAction()) {
+                    case MotionEvent.ACTION_DOWN:
+                        lastTouchX = event.getX();
+                        lastTouchY = event.getY();
+                        // 默认允许父视图拦截触摸事件，这样RecyclerView可以处理滑动
+                        getParent().requestDisallowInterceptTouchEvent(false);
+                        break;
+                    
+                    case MotionEvent.ACTION_MOVE:
+                        // 检查是否处于文本选择状态
+                        if (mTextSelectionInProgress) {
+                            // 在选择过程中，请求父视图不要拦截触摸事件
                             getParent().requestDisallowInterceptTouchEvent(true);
                             
                             // 检查是否拖拽的是开始marker（+号）
@@ -173,28 +168,36 @@ public class OcrImageView extends RelativeLayout {
                                 lastTouchY = touchY;
                                 return true;
                             }
-                        case MotionEvent.ACTION_UP:
-                            // 触摸结束时，确定结束marker（-号）的最终位置
+                        }
+                        break;
+                    
+                    case MotionEvent.ACTION_UP:
+                        // 触摸结束时，确定结束marker（-号）的最终位置
+                        if (mTextSelectionInProgress) {
                             mEndCursorPoint.x = touchX;
                             mEndCursorPoint.y = touchY;
                             updateSelectionOnMove();
                             // 允许父视图重新拦截触摸事件
                             getParent().requestDisallowInterceptTouchEvent(false);
-                            mTextSelectionInProgress = false;
-                            break;
-                        case MotionEvent.ACTION_CANCEL:
-                            // 触摸取消时，确定结束marker（-号）的最终位置
+                            // 不设置mTextSelectionInProgress = false，让marker选择框保持可见
+                        }
+                        break;
+                    
+                    case MotionEvent.ACTION_CANCEL:
+                        // 触摸取消时，确定结束marker（-号）的最终位置
+                        if (mTextSelectionInProgress) {
                             mEndCursorPoint.x = touchX;
                             mEndCursorPoint.y = touchY;
                             updateSelectionOnMove();
                             // 允许父视图重新拦截触摸事件
                             getParent().requestDisallowInterceptTouchEvent(false);
-                            mTextSelectionInProgress = false;
-                            break;
-                    }
+                            // 不设置mTextSelectionInProgress = false，让marker选择框保持可见
+                        }
+                        break;
                 }
                 
-                return false;
+                // 将触摸事件传递给手势检测器
+                return mGestureDetector.onTouchEvent(event);
             }
         });
     }
@@ -380,7 +383,8 @@ public class OcrImageView extends RelativeLayout {
         if (mTextSelectionInProgress) {
             return true;
         }
-        return super.onInterceptTouchEvent(ev);
+        // 默认不拦截，让触摸事件传递给子视图和父视图
+        return false;
     }
     
     /**
@@ -489,6 +493,9 @@ public class OcrImageView extends RelativeLayout {
             
             int touchX = (int) e.getX();
             int touchY = (int) e.getY();
+            
+            // 长按开始时，请求父视图不要拦截触摸事件
+            getParent().requestDisallowInterceptTouchEvent(true);
             
             // 检查是否长按到了marker
             boolean touchedStartMarker = isMarkerTouched(mStartCursorPoint, touchX, touchY);
