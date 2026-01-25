@@ -66,6 +66,9 @@ public class MainActivity extends AppCompatActivity {
     private TextView tvHorizontalDistanceThreshold;
     private double horizontalDistanceThreshold = 0.5;
     private Switch swVerticalMerge;
+    private SeekBar sbHorizontalOverlapThreshold;
+    private TextView tvHorizontalOverlapThreshold;
+    private double horizontalOverlapThreshold = 0.5;
     private SeekBar sbVerticalDistanceThreshold;
     private TextView tvVerticalDistanceThreshold;
     private double verticalDistanceThreshold = 0.5;
@@ -171,6 +174,30 @@ public class MainActivity extends AppCompatActivity {
                 // 将进度值（0-100）转换为阈值（0.0-1.0）
                 verticalDistanceThreshold = progress / 100.0;
                 tvVerticalDistanceThreshold.setText(String.format("%.2f", verticalDistanceThreshold));
+                // 如果有上次的识别结果，重新处理并显示
+                if (lastBitmap != null && lastOcrResult != null) {
+                    updateOcrResultDisplay(lastBitmap, lastOcrResult);
+                }
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+                // 开始拖动时不需要特殊处理
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+                // 停止拖动时不需要特殊处理
+            }
+        });
+
+        // 横向重叠度阈值滑动条的监听器
+        sbHorizontalOverlapThreshold.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                // 将进度值（0-100）转换为阈值（0.0-1.0）
+                horizontalOverlapThreshold = progress / 100.0;
+                tvHorizontalOverlapThreshold.setText(String.format("%.2f", horizontalOverlapThreshold));
                 // 如果有上次的识别结果，重新处理并显示
                 if (lastBitmap != null && lastOcrResult != null) {
                     updateOcrResultDisplay(lastBitmap, lastOcrResult);
@@ -333,6 +360,8 @@ public class MainActivity extends AppCompatActivity {
         sbHorizontalDistanceThreshold = findViewById(R.id.sb_horizontal_distance_threshold);
         tvHorizontalDistanceThreshold = findViewById(R.id.tv_horizontal_distance_threshold);
         swVerticalMerge = findViewById(R.id.sw_vertical_merge);
+        sbHorizontalOverlapThreshold = findViewById(R.id.sb_horizontal_overlap_threshold);
+        tvHorizontalOverlapThreshold = findViewById(R.id.tv_horizontal_overlap_threshold);
         sbVerticalDistanceThreshold = findViewById(R.id.sb_vertical_distance_threshold);
         tvVerticalDistanceThreshold = findViewById(R.id.tv_vertical_distance_threshold);
         sbLeftDiffThreshold = findViewById(R.id.sb_left_diff_threshold);
@@ -930,7 +959,9 @@ public class MainActivity extends AppCompatActivity {
                 
                 // 检查左侧x坐标差值是否在阈值内
                 double currentLeft = getBoxLeft(currentBox);
+                double currentRight = getBoxRight(currentBox);
                 double nextLeft = getBoxLeft(nextBox);
+                double nextRight = getBoxRight(nextBox);
                 double leftDiff = Math.abs(currentLeft - nextLeft);
                 
                 // 计算两个框的平均宽度
@@ -941,8 +972,21 @@ public class MainActivity extends AppCompatActivity {
                 // 检查左侧差值是否在阈值内（差值占平均宽度的百分比）
                 boolean leftDiffWithinThreshold = leftDiff <= avgWidth * leftDiffThreshold;
                 
-                // 如果两个条件都满足，合并这两个框
-                if (distanceWithinThreshold && leftDiffWithinThreshold) {
+                // 计算横向重叠度
+                // 计算重叠区域的宽度
+                double overlapWidth = Math.max(0, Math.min(currentRight, nextRight) - Math.max(currentLeft, nextLeft));
+                
+                // 计算两个框的最大宽度
+                double maxBoxWidth = Math.max(currentWidth, nextWidth);
+                
+                // 计算重叠度百分比
+                double overlapRatio = maxBoxWidth > 0 ? overlapWidth / maxBoxWidth : 0.0;
+                
+                // 检查横向重叠度是否在阈值内
+                boolean overlapWithinThreshold = overlapRatio >= horizontalOverlapThreshold;
+                
+                // 如果所有条件都满足，合并这两个框
+                if (distanceWithinThreshold && leftDiffWithinThreshold && overlapWithinThreshold) {
                     RecResult mergedBox = mergeTwoBoxes(current, next);
                     
                     // 计算靠下的框的宽度在两个框最大宽度的百分比
@@ -955,8 +999,7 @@ public class MainActivity extends AppCompatActivity {
                         bottomBoxWidth = currentWidth;
                     }
                     
-                    double maxWidth = Math.max(currentWidth, nextWidth);
-                    double widthRatio = bottomBoxWidth / maxWidth;
+                    double widthRatio = bottomBoxWidth / maxBoxWidth;
                     
                     // 如果百分比低于阈值，标记为最终框
                     if (widthRatio < bottomWidthRatioThreshold) {
