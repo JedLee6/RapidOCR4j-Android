@@ -140,6 +140,8 @@ public class OcrImageView extends RelativeLayout {
                 if (event.getAction() == MotionEvent.ACTION_DOWN) {
                     lastTouchX = event.getX();
                     lastTouchY = event.getY();
+                    // 当触摸开始时，请求父视图不要拦截触摸事件
+                    getParent().requestDisallowInterceptTouchEvent(true);
                 }
                 
                 // 将触摸事件传递给手势检测器
@@ -154,6 +156,9 @@ public class OcrImageView extends RelativeLayout {
                 if (mTextSelectionInProgress) {
                     switch (event.getAction()) {
                         case MotionEvent.ACTION_MOVE:
+                            // 请求父视图不要拦截触摸事件
+                            getParent().requestDisallowInterceptTouchEvent(true);
+                            
                             // 检查是否拖拽的是开始marker
                             if (isMarkerTouched(mStartCursorPoint, touchX, touchY)) {
                                 mStartCursorPoint.x = touchX;
@@ -182,6 +187,13 @@ public class OcrImageView extends RelativeLayout {
                                 return true;
                             }
                         case MotionEvent.ACTION_UP:
+                            // 触摸结束时，允许父视图重新拦截触摸事件
+                            getParent().requestDisallowInterceptTouchEvent(false);
+                            mTextSelectionInProgress = false;
+                            break;
+                        case MotionEvent.ACTION_CANCEL:
+                            // 触摸取消时，允许父视图重新拦截触摸事件
+                            getParent().requestDisallowInterceptTouchEvent(false);
                             mTextSelectionInProgress = false;
                             break;
                     }
@@ -362,6 +374,18 @@ public class OcrImageView extends RelativeLayout {
      */
     private float pxToSp(Context context, float px) {
         return px / context.getResources().getDisplayMetrics().scaledDensity;
+    }
+    
+    /**
+     * 重写onInterceptTouchEvent方法，在文本选择进行中时拦截触摸事件
+     */
+    @Override
+    public boolean onInterceptTouchEvent(MotionEvent ev) {
+        // 如果文本选择正在进行中，拦截触摸事件
+        if (mTextSelectionInProgress) {
+            return true;
+        }
+        return super.onInterceptTouchEvent(ev);
     }
     
     /**
