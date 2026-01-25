@@ -65,6 +65,13 @@ public class MainActivity extends AppCompatActivity {
     private SeekBar sbHorizontalDistanceThreshold;
     private TextView tvHorizontalDistanceThreshold;
     private double horizontalDistanceThreshold = 0.5;
+    private Switch swVerticalMerge;
+    private SeekBar sbVerticalDistanceThreshold;
+    private TextView tvVerticalDistanceThreshold;
+    private double verticalDistanceThreshold = 0.5;
+    private SeekBar sbLeftDiffThreshold;
+    private TextView tvLeftDiffThreshold;
+    private double leftDiffThreshold = 0.5;
     private RecyclerView rvRecResult;
     private RecResultAdapter recResultAdapter;
     private RapidOCR rapidOCR;
@@ -137,6 +144,65 @@ public class MainActivity extends AppCompatActivity {
                 // 开始拖动时不需要特殊处理
             }
             
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+                // 停止拖动时不需要特殊处理
+            }
+        });
+
+        // 纵向框合并开关的监听器
+        swVerticalMerge.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                // 当开关状态改变时，重新处理当前的OCR结果
+                if (lastBitmap != null && lastOcrResult != null) {
+                    updateOcrResultDisplay(lastBitmap, lastOcrResult);
+                }
+            }
+        });
+
+        // 纵向距离阈值滑动条的监听器
+        sbVerticalDistanceThreshold.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                // 将进度值（0-100）转换为阈值（0.0-1.0）
+                verticalDistanceThreshold = progress / 100.0;
+                tvVerticalDistanceThreshold.setText(String.format("%.2f", verticalDistanceThreshold));
+                // 如果有上次的识别结果，重新处理并显示
+                if (lastBitmap != null && lastOcrResult != null) {
+                    updateOcrResultDisplay(lastBitmap, lastOcrResult);
+                }
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+                // 开始拖动时不需要特殊处理
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+                // 停止拖动时不需要特殊处理
+            }
+        });
+
+        // 左侧位置差值阈值滑动条的监听器
+        sbLeftDiffThreshold.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                // 将进度值（0-100）转换为阈值（0.0-1.0）
+                leftDiffThreshold = progress / 100.0;
+                tvLeftDiffThreshold.setText(String.format("%.2f", leftDiffThreshold));
+                // 如果有上次的识别结果，重新处理并显示
+                if (lastBitmap != null && lastOcrResult != null) {
+                    updateOcrResultDisplay(lastBitmap, lastOcrResult);
+                }
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+                // 开始拖动时不需要特殊处理
+            }
+
             @Override
             public void onStopTrackingTouch(SeekBar seekBar) {
                 // 停止拖动时不需要特殊处理
@@ -239,6 +305,11 @@ public class MainActivity extends AppCompatActivity {
         tvMergeThreshold = findViewById(R.id.tv_merge_threshold);
         sbHorizontalDistanceThreshold = findViewById(R.id.sb_horizontal_distance_threshold);
         tvHorizontalDistanceThreshold = findViewById(R.id.tv_horizontal_distance_threshold);
+        swVerticalMerge = findViewById(R.id.sw_vertical_merge);
+        sbVerticalDistanceThreshold = findViewById(R.id.sb_vertical_distance_threshold);
+        tvVerticalDistanceThreshold = findViewById(R.id.tv_vertical_distance_threshold);
+        sbLeftDiffThreshold = findViewById(R.id.sb_left_diff_threshold);
+        tvLeftDiffThreshold = findViewById(R.id.tv_left_diff_threshold);
     }
 
     /**
@@ -526,6 +597,12 @@ public class MainActivity extends AppCompatActivity {
             float threshold = sbMergeThreshold.getProgress() / 100.0f;
             // 执行横向框合并
             List<RecResult> mergedResults = mergeHorizontalBoxes(recResults, threshold);
+            
+            // 如果纵向框合并开关开启，执行纵向合并
+            if (swVerticalMerge.isChecked() && !mergedResults.isEmpty()) {
+                mergedResults = mergeVerticalBoxes(mergedResults);
+            }
+            
             // 重新构建识别文本
             ocrText = buildMergedText(mergedResults);
             // 更新识别结果详细信息
@@ -533,16 +610,24 @@ public class MainActivity extends AppCompatActivity {
             // 将合并后的结果传递给OcrImageView
             ivSelectedImage.setOcrResults(mergedResults);
         } else {
-            // 根据开关状态决定是否智能合并文本
-            if (swMergeText.isChecked()) {
-                ocrText = mergeTextSmartly(ocrText);
+            // 如果纵向框合并开关开启且未执行横向合并，直接执行纵向合并
+            if (swVerticalMerge.isChecked() && recResults != null && !recResults.isEmpty()) {
+                List<RecResult> mergedResults = mergeVerticalBoxes(recResults);
+                ocrText = buildMergedText(mergedResults);
+                recResultAdapter.updateData(mergedResults);
+                ivSelectedImage.setOcrResults(mergedResults);
+            } else {
+                // 根据开关状态决定是否智能合并文本
+                if (swMergeText.isChecked()) {
+                    ocrText = mergeTextSmartly(ocrText);
+                }
+                // 更新识别结果详细信息
+                if (recResults != null && !recResults.isEmpty()) {
+                    recResultAdapter.updateData(recResults);
+                }
+                // 将原始结果传递给OcrImageView
+                ivSelectedImage.setOcrResults(recResults);
             }
-            // 更新识别结果详细信息
-            if (recResults != null && !recResults.isEmpty()) {
-                recResultAdapter.updateData(recResults);
-            }
-            // 将原始结果传递给OcrImageView
-            ivSelectedImage.setOcrResults(recResults);
         }
         
         resultBuilder.append(getString(R.string.ocr_result)).append("\n")
@@ -764,6 +849,87 @@ public class MainActivity extends AppCompatActivity {
         
         // 创建合并后的RecResult
         return new RecResult(mergedBox, mergedText, mergedConfidence, null);
+    }
+    
+    // 纵向框合并
+    private List<RecResult> mergeVerticalBoxes(List<RecResult> results) {
+        if (results == null || results.size() < 2) {
+            return results;
+        }
+        
+        // 计算所有框的平均高度
+        double totalHeight = 0;
+        for (RecResult result : results) {
+            Point[] dtBoxes = result.getDtBoxes();
+            double height = getBoxBottom(dtBoxes) - getBoxTop(dtBoxes);
+            totalHeight += height;
+        }
+        double avgHeight = totalHeight / results.size();
+        
+        // 创建一个可修改的列表
+        List<RecResult> mergedResults = new ArrayList<>(results);
+        
+        // 从上往下遍历（按top坐标排序）
+        mergedResults.sort(Comparator.comparingDouble(result -> getBoxTop(result.getDtBoxes())));
+        
+        // 标记是否有合并发生
+        boolean merged;
+        do {
+            merged = false;
+            for (int i = 0; i < mergedResults.size() - 1; ) {
+                RecResult current = mergedResults.get(i);
+                RecResult next = mergedResults.get(i + 1);
+                
+                Point[] currentBox = current.getDtBoxes();
+                Point[] nextBox = next.getDtBoxes();
+                
+                // 计算框的高度
+                double currentHeight = getBoxBottom(currentBox) - getBoxTop(currentBox);
+                double nextHeight = getBoxBottom(nextBox) - getBoxTop(nextBox);
+                
+                // 计算框之间的距离（next在current下方）
+                double distance = getBoxTop(nextBox) - getBoxBottom(currentBox);
+                
+                // 检查距离是否在阈值内（距离占平均高度的百分比）
+                boolean distanceWithinThreshold = distance <= avgHeight * verticalDistanceThreshold;
+                
+                // 检查左侧x坐标差值是否在阈值内
+                double currentLeft = getBoxLeft(currentBox);
+                double nextLeft = getBoxLeft(nextBox);
+                double leftDiff = Math.abs(currentLeft - nextLeft);
+                
+                // 计算两个框的平均宽度
+                double currentWidth = getBoxWidth(currentBox);
+                double nextWidth = getBoxWidth(nextBox);
+                double avgWidth = (currentWidth + nextWidth) / 2.0;
+                
+                // 检查左侧差值是否在阈值内（差值占平均宽度的百分比）
+                boolean leftDiffWithinThreshold = leftDiff <= avgWidth * leftDiffThreshold;
+                
+                // 如果两个条件都满足，合并这两个框
+                if (distanceWithinThreshold && leftDiffWithinThreshold) {
+                    RecResult mergedBox = mergeTwoBoxes(current, next);
+                    
+                    // 移除原来的两个框
+                    mergedResults.remove(i + 1);
+                    mergedResults.remove(i);
+                    
+                    // 添加合并后的框
+                    mergedResults.add(i, mergedBox);
+                    
+                    // 标记有合并发生
+                    merged = true;
+                    
+                    // 重新开始遍历，因为合并后的框可能还能与下一个框合并
+                    break;
+                } else {
+                    // 没有合并，继续检查下一个框
+                    i++;
+                }
+            }
+        } while (merged);
+        
+        return mergedResults;
     }
     
     // 获取框的左侧坐标
