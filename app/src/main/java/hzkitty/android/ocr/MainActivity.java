@@ -970,7 +970,7 @@ public class MainActivity extends AppCompatActivity {
                         if (".!?;。！？；¿¡".indexOf(lastChar) >= 0) {
                             // 如果上方框文本以句末终止符结尾，不合并，直接标记为最终框
                             upperBox.setFinalBox(true);
-                            lowerBox.setFinalBox(true);
+//                            lowerBox.setFinalBox(true);
                             i++;
                             continue;
                         }
