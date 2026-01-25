@@ -9,6 +9,7 @@ public class RecResult {
     private final String text;
     private final float confidence;
     private WordBoxResult wordBoxResult;
+    private boolean isFinalBox = false; // 标记是否为最终框，不再参与后续合并遍历
 
     public RecResult(Point[] dtBoxes, String text, float confidence, WordBoxResult wordBoxResult) {
         this.dtBoxes = dtBoxes;
@@ -41,6 +42,14 @@ public class RecResult {
         this.wordBoxResult = wordBoxResult;
     }
 
+    public boolean isFinalBox() {
+        return isFinalBox;
+    }
+
+    public void setFinalBox(boolean isFinalBox) {
+        this.isFinalBox = isFinalBox;
+    }
+
     @Override
     public String toString() {
         return "RecResult{" +
@@ -48,6 +57,7 @@ public class RecResult {
                 ", text='" + text + '\'' +
                 ", confidence=" + confidence +
                 ", wordBoxResult=" + wordBoxResult +
+                ", isFinalBox=" + isFinalBox +
                 '}';
     }
 }

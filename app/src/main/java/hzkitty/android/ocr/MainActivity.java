@@ -72,6 +72,9 @@ public class MainActivity extends AppCompatActivity {
     private SeekBar sbLeftDiffThreshold;
     private TextView tvLeftDiffThreshold;
     private double leftDiffThreshold = 0.5;
+    private SeekBar sbBottomWidthRatioThreshold;
+    private TextView tvBottomWidthRatioThreshold;
+    private double bottomWidthRatioThreshold = 0.5;
     private RecyclerView rvRecResult;
     private RecResultAdapter recResultAdapter;
     private RapidOCR rapidOCR;
@@ -208,6 +211,30 @@ public class MainActivity extends AppCompatActivity {
                 // 停止拖动时不需要特殊处理
             }
         });
+
+        // 下方框宽度百分比阈值滑动条的监听器
+        sbBottomWidthRatioThreshold.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                // 将进度值（0-100）转换为阈值（0.0-1.0）
+                bottomWidthRatioThreshold = progress / 100.0;
+                tvBottomWidthRatioThreshold.setText(String.format("%.2f", bottomWidthRatioThreshold));
+                // 如果有上次的识别结果，重新处理并显示
+                if (lastBitmap != null && lastOcrResult != null) {
+                    updateOcrResultDisplay(lastBitmap, lastOcrResult);
+                }
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+                // 开始拖动时不需要特殊处理
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+                // 停止拖动时不需要特殊处理
+            }
+        });
         
         // 初始化识别结果详细信息RecyclerView
         rvRecResult = findViewById(R.id.rv_rec_result);
@@ -310,6 +337,8 @@ public class MainActivity extends AppCompatActivity {
         tvVerticalDistanceThreshold = findViewById(R.id.tv_vertical_distance_threshold);
         sbLeftDiffThreshold = findViewById(R.id.sb_left_diff_threshold);
         tvLeftDiffThreshold = findViewById(R.id.tv_left_diff_threshold);
+        sbBottomWidthRatioThreshold = findViewById(R.id.sb_bottom_width_ratio_threshold);
+        tvBottomWidthRatioThreshold = findViewById(R.id.tv_bottom_width_ratio_threshold);
     }
 
     /**
@@ -880,6 +909,12 @@ public class MainActivity extends AppCompatActivity {
                 RecResult current = mergedResults.get(i);
                 RecResult next = mergedResults.get(i + 1);
                 
+                // 如果当前框或下一个框已经是最终框，跳过合并
+                if (current.isFinalBox() || next.isFinalBox()) {
+                    i++;
+                    continue;
+                }
+                
                 Point[] currentBox = current.getDtBoxes();
                 Point[] nextBox = next.getDtBoxes();
                 
@@ -909,6 +944,24 @@ public class MainActivity extends AppCompatActivity {
                 // 如果两个条件都满足，合并这两个框
                 if (distanceWithinThreshold && leftDiffWithinThreshold) {
                     RecResult mergedBox = mergeTwoBoxes(current, next);
+                    
+                    // 计算靠下的框的宽度在两个框最大宽度的百分比
+                    double bottomBoxWidth;
+                    if (getBoxTop(currentBox) < getBoxTop(nextBox)) {
+                        // current在上方，next在下方
+                        bottomBoxWidth = nextWidth;
+                    } else {
+                        // next在上方，current在下方
+                        bottomBoxWidth = currentWidth;
+                    }
+                    
+                    double maxWidth = Math.max(currentWidth, nextWidth);
+                    double widthRatio = bottomBoxWidth / maxWidth;
+                    
+                    // 如果百分比低于阈值，标记为最终框
+                    if (widthRatio < bottomWidthRatioThreshold) {
+                        mergedBox.setFinalBox(true);
+                    }
                     
                     // 移除原来的两个框
                     mergedResults.remove(i + 1);

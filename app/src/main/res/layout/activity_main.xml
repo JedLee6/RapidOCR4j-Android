@@ -336,7 +336,8 @@
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:orientation="vertical">
+                        android:orientation="vertical"
+                        android:layout_marginBottom="12dp">
 
                         <LinearLayout
                             android:layout_width="match_parent"
@@ -372,6 +373,52 @@
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:text="左侧位置差值阈值说明：控制纵向框合并的对齐条件\n- 值越大（接近1.0）：允许的左侧位置差值越大，更多不对齐的框会被合并\n- 值越小（接近0.0）：允许的左侧位置差值越小，只有对齐的框才会被合并"
+                            android:textSize="12sp"
+                            android:textColor="@android:color/darker_gray"
+                            android:paddingTop="8dp"
+                            android:lineSpacingExtra="4sp" />
+                    </LinearLayout>
+
+                    <!-- 下方框宽度百分比阈值滑动条 -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:gravity="center_vertical">
+
+                            <TextView
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="下方框宽度百分比阈值"
+                                android:textSize="14sp" />
+
+                            <TextView
+                                android:id="@+id/tv_bottom_width_ratio_threshold"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="0.5"
+                                android:textSize="14sp"
+                                android:textColor="@android:color/holo_blue_dark"
+                                android:paddingLeft="8dp" />
+                        </LinearLayout>
+
+                        <SeekBar
+                            android:id="@+id/sb_bottom_width_ratio_threshold"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:max="100"
+                            android:progress="50" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="下方框宽度百分比阈值说明：控制纵向框合并后的结束条件\n- 值越大（接近1.0）：要求下方框宽度占比越大才停止合并\n- 值越小（接近0.0）：允许下方框宽度占比越小就停止合并"
                             android:textSize="12sp"
                             android:textColor="@android:color/darker_gray"
                             android:paddingTop="8dp"
