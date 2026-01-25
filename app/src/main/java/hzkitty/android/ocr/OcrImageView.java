@@ -119,6 +119,11 @@ public class OcrImageView extends RelativeLayout {
         initGestureDetector();
     }
     
+    // 记录按下的时间，用于区分点击和长按操作
+    private long mTouchDownTime = 0;
+    // 记录是否已经触发了长按事件
+    private boolean mLongPressTriggered = false;
+    
     /**
      * 初始化手势检测器，用于检测长按事件
      */
@@ -136,12 +141,10 @@ public class OcrImageView extends RelativeLayout {
                     case MotionEvent.ACTION_DOWN:
                         lastTouchX = event.getX();
                         lastTouchY = event.getY();
-                        
-                        // 如果当前显示了文本选择UI，点击任意区域都隐藏它
-                        if (mShowTextSelectionUI) {
-                            hideTextSelectionUI();
-                            return true;
-                        }
+                        // 记录按下的时间
+                        mTouchDownTime = System.currentTimeMillis();
+                        // 重置长按触发标志
+                        mLongPressTriggered = false;
                         
                         // 默认允许父视图拦截触摸事件，这样RecyclerView可以处理滑动
                         getParent().requestDisallowInterceptTouchEvent(false);
@@ -183,6 +186,15 @@ public class OcrImageView extends RelativeLayout {
                         break;
                     
                     case MotionEvent.ACTION_UP:
+                        // 计算按下到抬起的时间差
+                        long touchDuration = System.currentTimeMillis() - mTouchDownTime;
+                        
+                        // 如果当前显示了文本选择UI，且是轻触操作（时间短于500毫秒且未触发长按事件），则隐藏它
+                        if (mShowTextSelectionUI && touchDuration < 500 && !mTextSelectionInProgress && !mLongPressTriggered) {
+                            hideTextSelectionUI();
+                            return true;
+                        }
+                        
                         // 触摸结束时，确定结束marker（-号）的最终位置
                         if (mTextSelectionInProgress) {
                             mEndCursorPoint.x = touchX;
@@ -196,6 +208,9 @@ public class OcrImageView extends RelativeLayout {
                                 showSystemTextSelectionMenu(selectedText, touchX, touchY);
                                 mShowTextSelectionUI = true;
                             }
+                            
+                            // 文本选择完成，重置选择状态
+                            mTextSelectionInProgress = false;
                             
                             // 允许父视图重新拦截触摸事件
                             getParent().requestDisallowInterceptTouchEvent(false);
@@ -509,6 +524,9 @@ public class OcrImageView extends RelativeLayout {
         public void onLongPress(MotionEvent e) {
             super.onLongPress(e);
             
+            // 记录已经触发了长按事件
+            mLongPressTriggered = true;
+            
             int touchX = (int) e.getX();
             int touchY = (int) e.getY();
             
@@ -621,8 +639,8 @@ public class OcrImageView extends RelativeLayout {
             
             @Override
             public void onDestroyActionMode(android.view.ActionMode mode) {
-                // 当菜单销毁时，隐藏文本选择UI
-                hideTextSelectionUI();
+                // 当菜单销毁时，不隐藏文本选择UI，让marker和红框继续显示
+                mShowTextSelectionUI = false;
             }
         });
     }
