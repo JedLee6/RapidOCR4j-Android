@@ -1095,7 +1095,7 @@ public class OcrImageView extends FrameLayout {
                 
                 // 菜单显示在选择区域上方
                 int x = (int) (screenLocation[0] + selectionRect.centerX());
-                int y = (int) (screenLocation[1] + selectionRect.top - dpToPx(getContext(), 50));
+                int y = (int) (screenLocation[1] + selectionRect.top - dpToPx(getContext(), 70));
                 
                 // 确保不超出屏幕顶部
                 if (y < dpToPx(getContext(), 50)) {
