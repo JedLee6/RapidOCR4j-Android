@@ -42,7 +42,10 @@ import android.util.TypedValue;
 import androidx.core.widget.TextViewCompat;
 import android.content.res.ColorStateList;
 
+import android.view.ScaleGestureDetector;
+
 public class OcrImageView extends FrameLayout {
+    private FrameLayout mContainer; // 内容容器，用于统一缩放和平移
     private ImageView mImageView;
     private FrameLayout mTextContainer;
     private LensSelectView mLensSelectView;
@@ -50,6 +53,17 @@ public class OcrImageView extends FrameLayout {
     private List<RecResult> mOcrResults;
     private List<TextView> mTextViews;
     private List<OcrChar> mCharList;
+    
+    // 手势检测相关
+    private ScaleGestureDetector mScaleDetector;
+    private GestureDetector mGestureDetector;
+    
+    private float mScale = 1.0f;
+    private float mTransX = 0f;
+    private float mTransY = 0f;
+    
+    private static final float MIN_SCALE = 1.0f;
+    private static final float MAX_SCALE = 5.0f;
     
     private Paint mDebugPaint; // 仅用于调试，显示文本框边界
     
@@ -90,6 +104,14 @@ public class OcrImageView extends FrameLayout {
     }
     
     private void init() {
+        // 初始化容器
+        mContainer = new FrameLayout(getContext());
+        mContainer.setLayoutParams(new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
+        // 设置Pivot为(0,0)，方便通过Translation和Scale控制位置
+        mContainer.setPivotX(0);
+        mContainer.setPivotY(0);
+        addView(mContainer);
+        
         // 初始化子视图
         mImageView = new ImageView(getContext());
         mTextContainer = new FrameLayout(getContext());
@@ -97,27 +119,31 @@ public class OcrImageView extends FrameLayout {
         
         // 设置ImageView参数
         mImageView.setScaleType(ImageView.ScaleType.FIT_CENTER);
-        mImageView.setLayoutParams(new RelativeLayout.LayoutParams(
-                RelativeLayout.LayoutParams.MATCH_PARENT,
-                RelativeLayout.LayoutParams.WRAP_CONTENT));
+        mImageView.setLayoutParams(new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT)); // 修改为MATCH_PARENT以填充容器
         mImageView.setAdjustViewBounds(true);
         
         // 设置文本容器参数
-        mTextContainer.setLayoutParams(new RelativeLayout.LayoutParams(
-                RelativeLayout.LayoutParams.MATCH_PARENT,
-                RelativeLayout.LayoutParams.MATCH_PARENT));
+        mTextContainer.setLayoutParams(new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT));
         mTextContainer.setClipChildren(false);
         mTextContainer.setClipToPadding(false);
         
         // 设置LensSelectView参数
-        mLensSelectView.setLayoutParams(new RelativeLayout.LayoutParams(
-                RelativeLayout.LayoutParams.MATCH_PARENT,
-                RelativeLayout.LayoutParams.MATCH_PARENT));
+        mLensSelectView.setLayoutParams(new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT));
         
         // 将子视图添加到容器中
-        addView(mImageView);
-        addView(mTextContainer);
-        addView(mLensSelectView);
+        mContainer.addView(mImageView);
+        mContainer.addView(mTextContainer);
+        mContainer.addView(mLensSelectView);
+        
+        // 初始化手势检测器
+        mScaleDetector = new ScaleGestureDetector(getContext(), new ScaleListener());
+        mGestureDetector = new GestureDetector(getContext(), new GestureListener());
         
         // 初始化调试画笔（可选）
         mDebugPaint = new Paint();
@@ -128,6 +154,157 @@ public class OcrImageView extends FrameLayout {
         mOcrResults = new ArrayList<>();
         mTextViews = new ArrayList<>();
         mCharList = new ArrayList<>();
+    }
+    
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent ev) {
+        // 处理手势缩放和平移
+        // 优先让ScaleDetector处理
+        mScaleDetector.onTouchEvent(ev);
+        
+        // 如果正在缩放，禁止父视图拦截事件（解决与ScrollView的冲突）
+        if (mScaleDetector.isInProgress()) {
+            getParent().requestDisallowInterceptTouchEvent(true);
+        }
+        
+        // 如果不是在缩放中，尝试处理平移
+        if (!mScaleDetector.isInProgress()) {
+            mGestureDetector.onTouchEvent(ev);
+        }
+        
+        // 继续分发事件给子视图（如LensSelectView）
+        // 注意：如果LensSelectView消费了事件，这里依然会返回true
+        return super.dispatchTouchEvent(ev);
+    }
+
+    /**
+     * 缩放手势监听器
+     */
+    private class ScaleListener extends ScaleGestureDetector.SimpleOnScaleGestureListener {
+        @Override
+        public boolean onScaleBegin(ScaleGestureDetector detector) {
+            // 开始缩放时，禁止父视图拦截
+            getParent().requestDisallowInterceptTouchEvent(true);
+            return true;
+        }
+
+        @Override
+        public boolean onScale(ScaleGestureDetector detector) {
+            float scaleFactor = detector.getScaleFactor();
+            float newScale = mScale * scaleFactor;
+            
+            // 限制缩放范围
+            newScale = Math.max(MIN_SCALE, Math.min(newScale, MAX_SCALE));
+            
+            // 计算焦点在内容坐标系中的位置 (相对于容器未缩放时的坐标)
+            // 当前屏幕焦点 = mTrans + focusInContent * mScale
+            // focusInContent = (当前屏幕焦点 - mTrans) / mScale
+            float focusX = detector.getFocusX();
+            float focusY = detector.getFocusY();
+            
+            float contentFocusX = (focusX - mTransX) / mScale;
+            float contentFocusY = (focusY - mTransY) / mScale;
+            
+            // 更新缩放比例
+            mScale = newScale;
+            
+            // 更新平移量，保持焦点位置不变
+            // 新屏幕焦点(不变) = mNewTrans + focusInContent * mNewScale
+            // mNewTrans = 屏幕焦点 - focusInContent * mNewScale
+            mTransX = focusX - contentFocusX * mScale;
+            mTransY = focusY - contentFocusY * mScale;
+            
+            // 边界检查
+            checkBounds();
+            
+            // 应用变换
+            applyTransform();
+            
+            return true;
+        }
+    }
+    
+    /**
+     * 普通手势监听器（用于平移）
+     */
+    private class GestureListener extends GestureDetector.SimpleOnGestureListener {
+        @Override
+        public boolean onScroll(MotionEvent e1, MotionEvent e2, float distanceX, float distanceY) {
+            // 如果LensSelectView正在拖拽手柄，不进行平移
+            if (mLensSelectView.isDraggingHandle()) {
+                return false;
+            }
+            
+            // 如果缩放比例大于1，说明在查看细节，禁止父视图拦截以允许自由平移
+            if (mScale > MIN_SCALE) {
+                getParent().requestDisallowInterceptTouchEvent(true);
+            } else {
+                return false; // 如果未缩放，不处理平移，交给ScrollView
+            }
+            
+            mTransX -= distanceX;
+            mTransY -= distanceY;
+            
+            checkBounds();
+            applyTransform();
+            
+            return true;
+        }
+        
+        // 可以添加双击复位功能
+        @Override
+        public boolean onDoubleTap(MotionEvent e) {
+            if (mScale > MIN_SCALE) {
+                // 复位
+                mScale = MIN_SCALE;
+                mTransX = 0;
+                mTransY = 0;
+            } else {
+                // 放大到2倍
+                float targetScale = 2.0f;
+                float focusX = e.getX();
+                float focusY = e.getY();
+                
+                // 简单的放大逻辑，围绕点击点
+                mTransX = focusX - (focusX - mTransX) * (targetScale / mScale);
+                mTransY = focusY - (focusY - mTransY) * (targetScale / mScale);
+                mScale = targetScale;
+            }
+            checkBounds();
+            applyTransform();
+            return true;
+        }
+    }
+    
+    private void checkBounds() {
+        // 计算内容实际占用的尺寸
+        float contentWidth = getWidth() * mScale;
+        float contentHeight = getHeight() * mScale;
+        
+        // 限制水平平移
+        if (contentWidth <= getWidth()) {
+            // 如果内容小于视图宽度，居中
+            mTransX = (getWidth() - contentWidth) / 2;
+        } else {
+            // 限制左右边界
+            // maxTransX = 0 (左边贴左边)
+            // minTransX = viewWidth - contentWidth (右边贴右边)
+            mTransX = Math.min(0, Math.max(getWidth() - contentWidth, mTransX));
+        }
+        
+        // 限制垂直平移
+        if (contentHeight <= getHeight()) {
+            mTransY = (getHeight() - contentHeight) / 2;
+        } else {
+            mTransY = Math.min(0, Math.max(getHeight() - contentHeight, mTransY));
+        }
+    }
+    
+    private void applyTransform() {
+        mContainer.setScaleX(mScale);
+        mContainer.setScaleY(mScale);
+        mContainer.setTranslationX(mTransX);
+        mContainer.setTranslationY(mTransY);
     }
     
     public void setImageBitmap(Bitmap bitmap) {
@@ -641,6 +818,13 @@ public class OcrImageView extends FrameLayout {
         
         // 放大镜
         private Magnifier mMagnifier;
+
+        /**
+         * 判断是否正在拖拽手柄
+         */
+        public boolean isDraggingHandle() {
+            return mDraggingHandle != HandleType.NONE;
+        }
 
         public LensSelectView(Context context) {
             super(context);
