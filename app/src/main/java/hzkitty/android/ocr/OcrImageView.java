@@ -228,15 +228,54 @@ public class OcrImageView extends FrameLayout {
                         // 如果没有WordBoxResult，则使用文本框作为字符框
                         String text = result.getText();
                         if (text != null) {
-                            float charWidth = (right - left) / (float) text.length();
-                            for (int i = 0; i < text.length(); i++) {
-                                char c = text.charAt(i);
-                                float charLeft = left + i * charWidth;
-                                float charRight = charLeft + charWidth;
-                                RectF charRect = new RectF(charLeft, top, charRight, bottom);
-                                OcrChar ocrChar = new OcrChar(String.valueOf(c), charRect, charIndex);
-                                mCharList.add(ocrChar);
-                                charIndex++;
+                            // 检查是否有换行符，处理多行RecResult
+                            String[] lines = text.split("\n");
+                            int lineCount = lines.length;
+                            
+                            if (lineCount > 1) {
+                                // 多行处理：按行数平分高度
+                                float lineHeight = (bottom - top) / (float) lineCount;
+                                
+                                for (int lineIndex = 0; lineIndex < lineCount; lineIndex++) {
+                                    String lineText = lines[lineIndex];
+                                    float lineTop = top + lineIndex * lineHeight;
+                                    float lineBottom = lineTop + lineHeight;
+                                    
+                                    // 处理行内字符
+                                    if (lineText.length() > 0) {
+                                        float charWidth = (right - left) / (float) lineText.length();
+                                        for (int i = 0; i < lineText.length(); i++) {
+                                            char c = lineText.charAt(i);
+                                            float charLeft = left + i * charWidth;
+                                            float charRight = charLeft + charWidth;
+                                            RectF charRect = new RectF(charLeft, lineTop, charRight, lineBottom);
+                                            OcrChar ocrChar = new OcrChar(String.valueOf(c), charRect, charIndex);
+                                            mCharList.add(ocrChar);
+                                            charIndex++;
+                                        }
+                                    }
+                                    
+                                    // 如果不是最后一行，添加一个代表换行符的OcrChar
+                                    // 这样在复制时可以保留换行，且保持index连续
+                                    if (lineIndex < lineCount - 1) {
+                                        float lineEnd = right;
+                                        // 换行符宽高设为0或者极小，位置在行末
+                                        RectF newlineRect = new RectF(lineEnd, lineTop, lineEnd, lineBottom);
+                                        mCharList.add(new OcrChar("\n", newlineRect, charIndex++));
+                                    }
+                                }
+                            } else {
+                                // 单行处理（原有逻辑）
+                                float charWidth = (right - left) / (float) text.length();
+                                for (int i = 0; i < text.length(); i++) {
+                                    char c = text.charAt(i);
+                                    float charLeft = left + i * charWidth;
+                                    float charRight = charLeft + charWidth;
+                                    RectF charRect = new RectF(charLeft, top, charRight, bottom);
+                                    OcrChar ocrChar = new OcrChar(String.valueOf(c), charRect, charIndex);
+                                    mCharList.add(ocrChar);
+                                    charIndex++;
+                                }
                             }
                         }
                     }

@@ -832,8 +832,8 @@ public class MainActivity extends AppCompatActivity {
             
             // 检查是否可以合并（水平方向连续）
             if (isHorizontallyAdjacent(currentMerge.getDtBoxes(), nextBox.getDtBoxes())) {
-                // 合并两个文本框
-                currentMerge = mergeTwoBoxes(currentMerge, nextBox);
+                // 合并两个文本框，横向合并使用空格分隔
+                currentMerge = mergeTwoBoxes(currentMerge, nextBox, " ");
             } else {
                 // 添加合并后的文本框，开始新的合并
                 mergedLine.add(currentMerge);
@@ -903,6 +903,11 @@ public class MainActivity extends AppCompatActivity {
     
     // 合并两个文本框
     private RecResult mergeTwoBoxes(RecResult box1, RecResult box2) {
+        return mergeTwoBoxes(box1, box2, " ");
+    }
+
+    // 合并两个文本框（带分隔符）
+    private RecResult mergeTwoBoxes(RecResult box1, RecResult box2, String separator) {
         Point[] dtBoxes1 = box1.getDtBoxes();
         Point[] dtBoxes2 = box2.getDtBoxes();
         
@@ -920,7 +925,7 @@ public class MainActivity extends AppCompatActivity {
         mergedBox[3] = new Point(left, bottom);
         
         // 合并文本
-        String mergedText = box1.getText() + " " + box2.getText();
+        String mergedText = box1.getText() + separator + box2.getText();
         
         // 使用两个框的平均置信度
         float mergedConfidence = (box1.getConfidence() + box2.getConfidence()) / 2;
@@ -1032,10 +1037,10 @@ public class MainActivity extends AppCompatActivity {
                     boolean overlapWithinThreshold = overlapRatio >= horizontalOverlapThreshold;
                     
                     // 如果所有条件都满足，合并这两个框
-                    if (distanceWithinThreshold && leftDiffWithinThreshold && overlapWithinThreshold) {
-                        RecResult mergedBox = mergeTwoBoxes(current, next);
-                        
-                        // 计算靠下的框的宽度在两个框最大宽度的百分比
+                if (distanceWithinThreshold && leftDiffWithinThreshold && overlapWithinThreshold) {
+                    RecResult mergedBox = mergeTwoBoxes(current, next, "\n");
+                    
+                    // 计算靠下的框的宽度在两个框最大宽度的百分比
                         double bottomBoxWidth = currentOnTop ? nextWidth : currentWidth;
                         
                         double widthRatio = bottomBoxWidth / maxBoxWidth;
