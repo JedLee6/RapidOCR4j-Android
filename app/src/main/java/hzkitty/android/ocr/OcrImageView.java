@@ -501,7 +501,27 @@ public class OcrImageView extends FrameLayout {
             // 1. 处理当前字符如果是换行符的情况
             if (curr.charText.equals("\n") || curr.charText.equals("\r") || curr.charText.equals("\r\n")) {
                 if (i + 1 < chars.size()) {
-                    smartJoin(sb, chars.get(i + 1));
+                    OcrChar next = chars.get(i + 1);
+                    boolean isHardWrap = false;
+                    
+                    // 如果跨越了文本块，检查是否需要硬换行
+                    if (curr.blockIndex != next.blockIndex) {
+                        float currHeight = curr.rect.height();
+                        float nextHeight = next.rect.height();
+                        float avgHeight = (currHeight + nextHeight) / 2;
+                        float verticalGap = next.rect.top - curr.rect.bottom;
+                        
+                        // 间距过大，视为硬换行
+                        if (verticalGap >= avgHeight * 0.5) {
+                            isHardWrap = true;
+                        }
+                    }
+                    
+                    if (isHardWrap) {
+                        sb.append("\n");
+                    } else {
+                        smartJoin(sb, next);
+                    }
                 }
                 continue;
             }
@@ -916,6 +936,8 @@ public class OcrImageView extends FrameLayout {
         
         // 拖拽状态
         private HandleType mDraggingHandle = HandleType.NONE;
+        // 是否禁用触摸偏移（用于初始长按选择时的跟随手指）
+        private boolean mIsTouchOffsetDisabled = false;
         
         // 手柄类型枚举
         private enum HandleType {
@@ -1036,9 +1058,17 @@ public class OcrImageView extends FrameLayout {
                         
                         performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS);
                         invalidate();
-                        // 显示操作菜单
-                        mIsMenuDismissedByUser = false;
-                        showActionMenu();
+                        
+                        // 进入拖拽模式，允许用户直接滑动调整选择
+                        // 默认为拖拽结束手柄（向后扩展），并禁用偏移以便精确指点
+                        mDraggingHandle = HandleType.END;
+                        mIsTouchOffsetDisabled = true;
+                        
+                        // 显示放大镜辅助定位
+                        if (mMagnifier != null) mMagnifier.show(x, y);
+                        getParent().requestDisallowInterceptTouchEvent(true);
+                        
+                        // 此时不显示菜单，等待ACTION_UP时显示
                     }
                 }
 
@@ -1259,6 +1289,9 @@ public class OcrImageView extends FrameLayout {
             
             switch (event.getAction()) {
                 case MotionEvent.ACTION_DOWN:
+                    // 重置偏移禁用标志，确保默认情况下（拖拽手柄）启用偏移
+                    mIsTouchOffsetDisabled = false;
+                    
                     // 1. 判断是否按到了手柄
                     if (isTouchingStartHandle(x, y)) {
                         mDraggingHandle = HandleType.START;
@@ -1285,8 +1318,26 @@ public class OcrImageView extends FrameLayout {
                         float radius = mHandleSize / 2f;
                         
                         if (mDraggingHandle == HandleType.START) {
-                            // 优化坐标：使用手柄右上角作为判断点 (x + radius, y - radius)
-                            int targetIndex = getClosestCharIndex(x + radius, y - radius);
+                            // 计算目标坐标
+                            float targetX = x;
+                            float targetY = y;
+                            
+                            // 仅在非初始选择拖拽时应用偏移
+                            if (!mIsTouchOffsetDisabled) {
+                                // 判断当前拖拽的是否为视觉上的开始手柄
+                                // 如果 start <= end，它是左边的手柄（开始手柄），偏移到右上角
+                                // 如果 start > end，它是右边的手柄（结束手柄），偏移到左上角
+                                boolean isVisualStart = mStartIndex <= mEndIndex;
+                                if (isVisualStart) {
+                                    targetX = x + radius;
+                                    targetY = y - radius;
+                                } else {
+                                    targetX = x - radius;
+                                    targetY = y - radius;
+                                }
+                            }
+
+                            int targetIndex = getClosestCharIndex(targetX, targetY);
                             if (targetIndex != -1) {
                                 mStartIndex = targetIndex;
                                 // 显示放大镜
@@ -1297,8 +1348,26 @@ public class OcrImageView extends FrameLayout {
                                 return true;
                             }
                         } else if (mDraggingHandle == HandleType.END) {
-                            // 优化坐标：使用手柄左上角作为判断点 (x - radius, y - radius)
-                            int targetIndex = getClosestCharIndex(x - radius, y - radius);
+                            // 计算目标坐标
+                            float targetX = x;
+                            float targetY = y;
+                            
+                            // 仅在非初始选择拖拽时应用偏移
+                            if (!mIsTouchOffsetDisabled) {
+                                // 判断当前拖拽的是否为视觉上的结束手柄
+                                // 如果 end >= start，它是右边的手柄（结束手柄），偏移到左上角
+                                // 如果 end < start，它是左边的手柄（开始手柄），偏移到右上角
+                                boolean isVisualEnd = mEndIndex >= mStartIndex;
+                                if (isVisualEnd) {
+                                    targetX = x - radius;
+                                    targetY = y - radius;
+                                } else {
+                                    targetX = x + radius;
+                                    targetY = y - radius;
+                                }
+                            }
+
+                            int targetIndex = getClosestCharIndex(targetX, targetY);
                             if (targetIndex != -1) {
                                 mEndIndex = targetIndex;
                                 // 显示放大镜
@@ -1341,6 +1410,9 @@ public class OcrImageView extends FrameLayout {
                     
                 case MotionEvent.ACTION_UP:
                 case MotionEvent.ACTION_CANCEL:
+                    // 重置偏移禁用标志
+                    mIsTouchOffsetDisabled = false;
+                    
                     // 隐藏放大镜
                     if (mMagnifier != null) mMagnifier.dismiss();
                     
