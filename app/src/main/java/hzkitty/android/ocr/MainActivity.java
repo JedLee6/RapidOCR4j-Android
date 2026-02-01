@@ -64,7 +64,7 @@ public class MainActivity extends AppCompatActivity {
     private TextView tvMergeThreshold;
     private SeekBar sbHorizontalDistanceThreshold;
     private TextView tvHorizontalDistanceThreshold;
-    private double horizontalDistanceThreshold = 0.5;
+    private double horizontalDistanceThreshold = 0.1;
     private Switch swVerticalMerge;
     private Switch swSentenceEndTerminator;
     private SeekBar sbHorizontalOverlapThreshold;
