@@ -32,7 +32,14 @@ import java.util.List;
 import io.github.hzkitty.entity.RecResult;
 import io.github.hzkitty.entity.WordBoxResult;
 import org.opencv.core.Point;
+import android.view.Gravity;
+import android.view.ViewGroup;
+import android.widget.LinearLayout;
+import android.widget.PopupWindow;
+import android.graphics.drawable.GradientDrawable;
+import android.util.TypedValue;
 import androidx.core.widget.TextViewCompat;
+import android.content.res.ColorStateList;
 
 public class OcrImageView extends FrameLayout {
     private ImageView mImageView;
@@ -607,7 +614,7 @@ public class OcrImageView extends FrameLayout {
         private final int mHandleSize;
         
         // 菜单相关
-        private ActionMode mActionMode;
+        private PopupWindow mActionPopup;
         
         // 手势检测
         private GestureDetector mGestureDetector;
@@ -649,6 +656,7 @@ public class OcrImageView extends FrameLayout {
                         // 智能扩展选择：向左右扩展直到遇到空白符
                         expandSelectionToWord(closestIndex);
                         
+                        performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS);
                         invalidate();
                         // 显示操作菜单
                         showActionMenu();
@@ -761,9 +769,8 @@ public class OcrImageView extends FrameLayout {
             mStartIndex = -1;
             mEndIndex = -1;
             mDraggingHandle = HandleType.NONE;
-            if (mActionMode != null) {
-                mActionMode.finish();
-                mActionMode = null;
+            if (mActionPopup != null) {
+                mActionPopup.dismiss();
             }
             invalidate();
         }
@@ -886,8 +893,11 @@ public class OcrImageView extends FrameLayout {
                     break;
                     
                 case MotionEvent.ACTION_UP:
-                    // 3. 停止拖拽
-                    mDraggingHandle = HandleType.NONE;
+                        // 3. 停止拖拽
+                    if (mDraggingHandle != HandleType.NONE) {
+                        mDraggingHandle = HandleType.NONE;
+                        showActionMenu();
+                    }
                     break;
             }
             
@@ -1021,44 +1031,130 @@ public class OcrImageView extends FrameLayout {
                 return;
             }
             
-            if (mActionMode == null) {
-                mActionMode = startActionMode(new ActionMode.Callback() {
-                    @Override
-                    public boolean onCreateActionMode(ActionMode mode, Menu menu) {
-                        menu.add(Menu.NONE, Menu.FIRST, Menu.NONE, "复制");
-                        menu.add(Menu.NONE, Menu.FIRST + 1, Menu.NONE, "全选");
-                        return true;
-                    }
-                    
-                    @Override
-                    public boolean onPrepareActionMode(ActionMode mode, Menu menu) {
-                        return false;
-                    }
-                    
-                    @Override
-                    public boolean onActionItemClicked(ActionMode mode, MenuItem item) {
-                        switch (item.getItemId()) {
-                            case Menu.FIRST:
-                                // 复制
-                                String selectedText = getSelectedString();
-                                copyToClipboard(selectedText);
-                                mode.finish();
-                                return true;
-                            case Menu.FIRST + 1:
-                                // 全选
-                                selectAll();
-                                return true;
-                            default:
-                                return false;
-                        }
-                    }
-                    
-                    @Override
-                    public void onDestroyActionMode(ActionMode mode) {
-                        mActionMode = null;
-                    }
-                });
+            // 如果已显示，先隐藏
+            if (mActionPopup != null && mActionPopup.isShowing()) {
+                mActionPopup.dismiss();
             }
+
+            // 创建菜单布局
+            LinearLayout menuLayout = new LinearLayout(getContext());
+            menuLayout.setOrientation(LinearLayout.HORIZONTAL);
+            menuLayout.setGravity(Gravity.CENTER_VERTICAL);
+            
+            // 设置背景
+            GradientDrawable background = new GradientDrawable();
+            background.setColor(Color.WHITE);
+            background.setCornerRadius(dpToPx(getContext(), 8));
+            // 添加阴影效果需要elevation，但GradientDrawable本身不支持，依赖View的elevation
+            menuLayout.setBackground(background);
+            menuLayout.setElevation(dpToPx(getContext(), 4));
+            
+            int padding = dpToPx(getContext(), 12);
+            menuLayout.setPadding(padding, padding / 2, padding, padding / 2);
+
+            // 创建"复制"按钮
+            TextView copyBtn = createMenuButton("Copy");
+            copyBtn.setOnClickListener(v -> {
+                String selectedText = getSelectedString();
+                copyToClipboard(selectedText);
+                clearSelection(); // 复制后清除选择
+                if (mActionPopup != null) mActionPopup.dismiss();
+            });
+            menuLayout.addView(copyBtn);
+
+            // 分割线
+            View divider = new View(getContext());
+            LinearLayout.LayoutParams dividerParams = new LinearLayout.LayoutParams(dpToPx(getContext(), 1), dpToPx(getContext(), 16));
+            dividerParams.setMargins(dpToPx(getContext(), 12), 0, dpToPx(getContext(), 12), 0);
+            divider.setLayoutParams(dividerParams);
+            divider.setBackgroundColor(Color.LTGRAY);
+            menuLayout.addView(divider);
+
+            // 创建"全选"按钮
+            TextView selectAllBtn = createMenuButton("Select All");
+            selectAllBtn.setOnClickListener(v -> {
+                selectAll();
+                if (mActionPopup != null) mActionPopup.dismiss();
+                // 全选后重新显示菜单
+                post(this::showActionMenu); 
+            });
+            menuLayout.addView(selectAllBtn);
+
+            // 创建PopupWindow
+            mActionPopup = new PopupWindow(menuLayout, ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, true);
+            mActionPopup.setElevation(dpToPx(getContext(), 8));
+            mActionPopup.setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(Color.TRANSPARENT)); // 必须设置背景才能响应点击外部消失
+            mActionPopup.setOutsideTouchable(true);
+
+            // 计算显示位置
+            RectF selectionRect = getSelectionRect();
+            if (selectionRect != null) {
+                // 将视图坐标转换为屏幕坐标
+                int[] screenLocation = new int[2];
+                getLocationOnScreen(screenLocation);
+                
+                // 菜单显示在选择区域上方
+                int x = (int) (screenLocation[0] + selectionRect.centerX());
+                int y = (int) (screenLocation[1] + selectionRect.top - dpToPx(getContext(), 50));
+                
+                // 确保不超出屏幕顶部
+                if (y < dpToPx(getContext(), 50)) {
+                    y = (int) (screenLocation[1] + selectionRect.bottom + dpToPx(getContext(), 10));
+                }
+                
+                // 居中显示
+                menuLayout.measure(MeasureSpec.UNSPECIFIED, MeasureSpec.UNSPECIFIED);
+                int popupWidth = menuLayout.getMeasuredWidth();
+                x -= popupWidth / 2;
+                
+                // 确保不超出屏幕左右边界
+                int screenWidth = getResources().getDisplayMetrics().widthPixels;
+                if (x < 10) x = 10;
+                if (x + popupWidth > screenWidth - 10) x = screenWidth - popupWidth - 10;
+
+                mActionPopup.showAtLocation(this, Gravity.NO_GRAVITY, x, y);
+            }
+        }
+
+        private TextView createMenuButton(String text) {
+            TextView btn = new TextView(getContext());
+            btn.setText(text);
+            btn.setTextColor(Color.BLACK);
+            btn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+            btn.setGravity(Gravity.CENTER);
+            btn.setPadding(dpToPx(getContext(), 4), dpToPx(getContext(), 8), dpToPx(getContext(), 4), dpToPx(getContext(), 8));
+            // 添加点击波纹效果
+            TypedValue outValue = new TypedValue();
+            getContext().getTheme().resolveAttribute(android.R.attr.selectableItemBackground, outValue, true);
+            btn.setBackgroundResource(outValue.resourceId);
+            return btn;
+        }
+
+        /**
+         * 获取当前选择区域的整体矩形
+         */
+        private RectF getSelectionRect() {
+            if (mStartIndex == -1 || mEndIndex == -1 || mCharList.isEmpty()) {
+                return null;
+            }
+            int start = Math.min(mStartIndex, mEndIndex);
+            int end = Math.max(mStartIndex, mEndIndex);
+            
+            float left = Float.MAX_VALUE;
+            float top = Float.MAX_VALUE;
+            float right = Float.MIN_VALUE;
+            float bottom = Float.MIN_VALUE;
+            
+            for (int i = start; i <= end && i < mCharList.size(); i++) {
+                OcrChar c = mCharList.get(i);
+                left = Math.min(left, c.rect.left);
+                top = Math.min(top, c.rect.top);
+                right = Math.max(right, c.rect.right);
+                bottom = Math.max(bottom, c.rect.bottom);
+            }
+            
+            if (left == Float.MAX_VALUE) return null;
+            return new RectF(left, top, right, bottom);
         }
         
         /**
