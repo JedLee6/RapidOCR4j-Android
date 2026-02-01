@@ -293,7 +293,7 @@ public class OcrImageView extends FrameLayout {
         mTextContainer.removeAllViews();
         mLensSelectView.clearSelection();
     }
-    
+
     /**
      * 创建用于显示识别文本的TextView
      */
@@ -615,10 +615,29 @@ public class OcrImageView extends FrameLayout {
         
         // 菜单相关
         private PopupWindow mActionPopup;
-        
+        private boolean mIsMenuDismissedByUser = false;
+        private final Runnable mShowMenuRunnable = new Runnable() {
+            @Override
+            public void run() {
+                if (mStartIndex != -1 && mEndIndex != -1 && !mIsMenuDismissedByUser) {
+                    showActionMenu();
+                }
+            }
+        };
+        private final android.view.ViewTreeObserver.OnScrollChangedListener mScrollChangedListener = new android.view.ViewTreeObserver.OnScrollChangedListener() {
+            @Override
+            public void onScrollChanged() {
+                if (mActionPopup != null && mActionPopup.isShowing()) {
+                    mActionPopup.dismiss();
+                }
+                removeCallbacks(mShowMenuRunnable);
+                postDelayed(mShowMenuRunnable, 200);
+            }
+        };
+
         // 手势检测
         private GestureDetector mGestureDetector;
-        
+
         public LensSelectView(Context context) {
             super(context);
             
@@ -659,6 +678,7 @@ public class OcrImageView extends FrameLayout {
                         performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS);
                         invalidate();
                         // 显示操作菜单
+                        mIsMenuDismissedByUser = false;
                         showActionMenu();
                     }
                 }
@@ -736,7 +756,15 @@ public class OcrImageView extends FrameLayout {
                         
                         // 检查是否点击了已选择的区域
                         if (isPointInSelection(x, y)) {
-                            return false;
+                            // 切换菜单可见性
+                            if (mActionPopup != null && mActionPopup.isShowing()) {
+                                mActionPopup.dismiss();
+                                mIsMenuDismissedByUser = true;
+                            } else {
+                                mIsMenuDismissedByUser = false;
+                                showActionMenu();
+                            }
+                            return true;
                         }
                         
                         // 点击了非选择区域，重置选择
@@ -752,6 +780,19 @@ public class OcrImageView extends FrameLayout {
             setFocusableInTouchMode(true);
             setClickable(true);
             setLongClickable(true);
+        }
+
+        @Override
+        protected void onAttachedToWindow() {
+            super.onAttachedToWindow();
+            getViewTreeObserver().addOnScrollChangedListener(mScrollChangedListener);
+        }
+
+        @Override
+        protected void onDetachedFromWindow() {
+            super.onDetachedFromWindow();
+            getViewTreeObserver().removeOnScrollChangedListener(mScrollChangedListener);
+            removeCallbacks(mShowMenuRunnable);
         }
         
         /**
@@ -769,6 +810,7 @@ public class OcrImageView extends FrameLayout {
             mStartIndex = -1;
             mEndIndex = -1;
             mDraggingHandle = HandleType.NONE;
+            mIsMenuDismissedByUser = false;
             if (mActionPopup != null) {
                 mActionPopup.dismiss();
             }
@@ -840,11 +882,13 @@ public class OcrImageView extends FrameLayout {
                     // 1. 判断是否按到了手柄
                     if (isTouchingStartHandle(x, y)) {
                         mDraggingHandle = HandleType.START;
+                        if (mActionPopup != null) mActionPopup.dismiss();
                         // 禁止父视图拦截触摸事件
                         getParent().requestDisallowInterceptTouchEvent(true);
                         return true;
                     } else if (isTouchingEndHandle(x, y)) {
                         mDraggingHandle = HandleType.END;
+                        if (mActionPopup != null) mActionPopup.dismiss();
                         // 禁止父视图拦截触摸事件
                         getParent().requestDisallowInterceptTouchEvent(true);
                         return true;
@@ -896,6 +940,7 @@ public class OcrImageView extends FrameLayout {
                         // 3. 停止拖拽
                     if (mDraggingHandle != HandleType.NONE) {
                         mDraggingHandle = HandleType.NONE;
+                        mIsMenuDismissedByUser = false;
                         showActionMenu();
                     }
                     break;
@@ -1081,10 +1126,10 @@ public class OcrImageView extends FrameLayout {
             menuLayout.addView(selectAllBtn);
 
             // 创建PopupWindow
-            mActionPopup = new PopupWindow(menuLayout, ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, true);
+            mActionPopup = new PopupWindow(menuLayout, ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, false);
             mActionPopup.setElevation(dpToPx(getContext(), 8));
-            mActionPopup.setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(Color.TRANSPARENT)); // 必须设置背景才能响应点击外部消失
-            mActionPopup.setOutsideTouchable(true);
+            mActionPopup.setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(Color.TRANSPARENT)); 
+            mActionPopup.setOutsideTouchable(false);
 
             // 计算显示位置
             RectF selectionRect = getSelectionRect();
