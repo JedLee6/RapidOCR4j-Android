@@ -80,11 +80,13 @@ public class OcrImageView extends FrameLayout {
         String charText;
         RectF rect;
         int index;
+        int blockIndex;
         
-        OcrChar(String charText, RectF rect, int index) {
+        OcrChar(String charText, RectF rect, int index, int blockIndex) {
             this.charText = charText;
             this.rect = rect;
             this.index = index;
+            this.blockIndex = blockIndex;
         }
     }
     
@@ -410,6 +412,7 @@ public class OcrImageView extends FrameLayout {
     private void populateCharListFromViews() {
         mCharList.clear();
         int globalIndex = 0;
+        int blockIndex = 0;
         
         for (TextView textView : mTextViews) {
             android.text.Layout layout = textView.getLayout();
@@ -453,8 +456,9 @@ public class OcrImageView extends FrameLayout {
                     charRect = new RectF(tvLeft + left, tvTop + lineTop, tvLeft + right, tvTop + lineBottom);
                 }
                 
-                mCharList.add(new OcrChar(charStr, charRect, globalIndex++));
+                mCharList.add(new OcrChar(charStr, charRect, globalIndex++, blockIndex));
             }
+            blockIndex++;
         }
         
         // 更新LensSelectView的数据
@@ -1465,7 +1469,7 @@ public class OcrImageView extends FrameLayout {
         }
         
         /**
-         * 获取选中的文本
+         * 获取选中的文本，并智能合并行
          */
         private String getSelectedString() {
             if (mStartIndex == -1 || mEndIndex == -1 || mCharList.isEmpty()) {
@@ -1477,12 +1481,84 @@ public class OcrImageView extends FrameLayout {
             
             StringBuilder sb = new StringBuilder();
             
-            for (int i = start; i <= end && i < mCharList.size(); i++) {
-                OcrChar ocrChar = mCharList.get(i);
-                sb.append(ocrChar.charText);
+            for (int i = start; i <= end; i++) {
+                if (i >= mCharList.size()) break;
+
+                OcrChar curr = mCharList.get(i);
+                sb.append(curr.charText);
+                
+                // 处理行尾连接
+                if (i < end && i + 1 < mCharList.size()) {
+                    OcrChar next = mCharList.get(i + 1);
+                    
+                    // 如果跨越了文本块（通常意味着换行）
+                    if (curr.blockIndex != next.blockIndex) {
+                        // 计算行高和垂直间距
+                        float currHeight = curr.rect.height();
+                        float nextHeight = next.rect.height();
+                        float avgHeight = (currHeight + nextHeight) / 2;
+                        
+                        // 垂直间距：下一行顶部 - 当前行底部
+                        float verticalGap = next.rect.top - curr.rect.bottom;
+                        
+                        // 判断是否为同一段落的软换行
+                        // 条件：间距不过大 (Gap < avgHeight * 1.5)
+                        boolean isSoftWrap = verticalGap < avgHeight * 1.5; 
+                        
+                        if (isSoftWrap) {
+                            // 智能合并策略
+                            boolean currIsCJK = isCJK(curr.charText);
+                            boolean nextIsCJK = isCJK(next.charText);
+                            
+                            if (curr.charText.equals("-")) {
+                                // 连字符处理
+                                boolean precedeBySpace = false;
+                                if (sb.length() > 1) {
+                                    char prevChar = sb.charAt(sb.length() - 2);
+                                    if (Character.isWhitespace(prevChar)) {
+                                        precedeBySpace = true;
+                                    }
+                                }
+                                
+                                if (!precedeBySpace) {
+                                    // 认为是单词截断，移除连字符
+                                    sb.deleteCharAt(sb.length() - 1);
+                                    // 不加空格
+                                } else {
+                                    // 独立连字符，保留并加空格
+                                    sb.append(" ");
+                                }
+                            } else if (currIsCJK && nextIsCJK) {
+                                // 中文/CJK之间不加空格
+                            } else {
+                                // 其他情况（英文/数字等）加空格
+                                if (sb.length() > 0 && sb.charAt(sb.length() - 1) != ' ') {
+                                    sb.append(" ");
+                                }
+                            }
+                        } else {
+                            // 硬换行，保留换行符
+                            sb.append("\n");
+                        }
+                    }
+                }
             }
             
             return sb.toString();
+        }
+        
+        private boolean isCJK(String s) {
+            if (s == null || s.isEmpty()) return false;
+            int cp = s.codePointAt(0);
+            Character.UnicodeBlock block = Character.UnicodeBlock.of(cp);
+            return Character.UnicodeBlock.CJK_UNIFIED_IDEOGRAPHS.equals(block)
+                    || Character.UnicodeBlock.CJK_COMPATIBILITY_IDEOGRAPHS.equals(block)
+                    || Character.UnicodeBlock.CJK_UNIFIED_IDEOGRAPHS_EXTENSION_A.equals(block)
+                    || Character.UnicodeBlock.CJK_UNIFIED_IDEOGRAPHS_EXTENSION_B.equals(block)
+                    || Character.UnicodeBlock.CJK_SYMBOLS_AND_PUNCTUATION.equals(block)
+                    || Character.UnicodeBlock.HALFWIDTH_AND_FULLWIDTH_FORMS.equals(block)
+                    || Character.UnicodeBlock.HIRAGANA.equals(block)
+                    || Character.UnicodeBlock.KATAKANA.equals(block);
         }
         
         /**
