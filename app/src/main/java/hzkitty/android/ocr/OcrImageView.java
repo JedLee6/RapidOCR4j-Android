@@ -500,12 +500,72 @@ public class OcrImageView extends FrameLayout {
                     float y = e.getY();
                     int closestIndex = getClosestCharIndex(x, y);
                     if (closestIndex != -1) {
-                        mStartIndex = closestIndex;
-                        mEndIndex = closestIndex;
+                        // 智能扩展选择：向左右扩展直到遇到空白符
+                        expandSelectionToWord(closestIndex);
+                        
                         invalidate();
                         // 显示操作菜单
                         showActionMenu();
                     }
+                }
+
+                /**
+                 * 从指定位置向左右扩展选择，直到遇到空白符或标点，且不跨行
+                 */
+                private void expandSelectionToWord(int index) {
+                    if (index < 0 || index >= mCharList.size()) return;
+
+                    int start = index;
+                    int end = index;
+                    
+                    OcrChar centerChar = mCharList.get(index);
+                    // 检查点击的是否本身就是边界符
+                    if (isBoundary(centerChar.charText)) {
+                        mStartIndex = index;
+                        mEndIndex = index;
+                        return;
+                    }
+                    
+                    float centerY = centerChar.rect.centerY();
+                    // 使用高度的一半作为行判定阈值，防止跨行选择
+                    float threshold = centerChar.rect.height() / 2f;
+                    
+                    // 向左扩展
+                    for (int i = index - 1; i >= 0; i--) {
+                        OcrChar current = mCharList.get(i);
+                        
+                        // 1. 检查是否跨行 (Y轴差异过大)
+                        if (Math.abs(current.rect.centerY() - centerY) > threshold) {
+                            break;
+                        }
+                        
+                        // 2. 检查是否遇到边界符
+                        if (isBoundary(current.charText)) {
+                            break;
+                        }
+                        
+                        start = i;
+                    }
+                    
+                    // 向右扩展
+                    for (int i = index + 1; i < mCharList.size(); i++) {
+                        OcrChar current = mCharList.get(i);
+                        
+                        // 1. 检查是否跨行
+                        if (Math.abs(current.rect.centerY() - centerY) > threshold) {
+                            break;
+                        }
+                        
+                        // 2. 检查是否遇到边界符
+                        if (isBoundary(current.charText)) {
+                            break;
+                        }
+                        
+                        end = i;
+                    }
+                    
+                    mStartIndex = start;
+                    mEndIndex = end;
                 }
 
                 @Override
@@ -746,6 +806,27 @@ public class OcrImageView extends FrameLayout {
                 }
             }
             return false;
+        }
+        
+        /**
+         * 判断字符是否为边界符（空白符或标点符号）
+         */
+        private boolean isBoundary(String text) {
+            if (text == null || text.isEmpty()) {
+                return false;
+            }
+            char c = text.charAt(0);
+            
+            // 空白符
+            if (Character.isWhitespace(c)) {
+                return true;
+            }
+            
+            // 常见的标点分隔符（包括英文和中文）
+            // 英文：, . ! ? ; :
+            // 中文：， 。 ！ ？ ； ： 、
+            String separators = ",.!?;:，。！？；：、";
+            return separators.indexOf(c) != -1;
         }
         
         /**
