@@ -1041,36 +1041,57 @@ public class OcrImageView extends FrameLayout {
             // 2. 绘制开始手柄
             if (start < mCharList.size()) {
                 OcrChar startChar = mCharList.get(start);
-                drawHandle(canvas, mStartHandleDrawable, startChar.rect.left, startChar.rect.bottom);
+                // 传入 true 表示开始手柄
+                drawHandle(canvas, true, startChar.rect.left, startChar.rect.bottom);
             }
             
             // 3. 绘制结束手柄
             if (end < mCharList.size()) {
                 OcrChar endChar = mCharList.get(end);
-                drawHandle(canvas, mEndHandleDrawable, endChar.rect.right, endChar.rect.bottom);
+                // 传入 false 表示结束手柄
+                drawHandle(canvas, false, endChar.rect.right, endChar.rect.bottom);
             }
         }
         
         /**
          * 绘制手柄
+         * @param isStartHandle true为开始手柄，false为结束手柄
+         * @param x 锚点X坐标（文本边界）
+         * @param y 锚点Y坐标（文本底部）
          */
-        private void drawHandle(Canvas canvas, Drawable drawable, float x, float y) {
-            float centerX = x;
-            float centerY = y;
+        private void drawHandle(Canvas canvas, boolean isStartHandle, float x, float y) {
+            float radius = mHandleSize / 2f;
+            float centerX, centerY;
             
-            if (drawable != null) {
-                // 使用资源图片绘制手柄
-                int left = (int) (centerX - mHandleSize / 2);
-                int top = (int) (centerY - mHandleSize / 2);
-                int right = left + mHandleSize;
-                int bottom = top + mHandleSize;
+            Path path = new Path();
+            
+            if (isStartHandle) {
+                // 开始手柄：位于锚点左下方
+                // 圆心向左下偏移半径距离
+                centerX = x - radius;
+                centerY = y + radius;
                 
-                drawable.setBounds(left, top, right, bottom);
-                drawable.draw(canvas);
+                // 1. 绘制圆形主体
+                path.addCircle(centerX, centerY, radius, Path.Direction.CW);
+                // 2. 填充右上角（使其变成直角）
+                // 矩形范围：圆心到(x, y-radius)之间其实是空的，我们需要填补圆心到(x,y)这个象限的缺口
+                // 实际上是填充圆心右上方的区域
+                // 矩形区域：left=centerX, top=centerY-radius, right=centerX+radius, bottom=centerY
+                path.addRect(centerX, centerY - radius, centerX + radius, centerY, Path.Direction.CW);
             } else {
-                // 绘制默认圆形手柄
-                canvas.drawCircle(centerX, centerY, mHandleSize / 2, mHandlePaint);
+                // 结束手柄：位于锚点右下方
+                // 圆心向右下偏移半径距离
+                centerX = x + radius;
+                centerY = y + radius;
+                
+                // 1. 绘制圆形主体
+                path.addCircle(centerX, centerY, radius, Path.Direction.CW);
+                // 2. 填充左上角（使其变成直角）
+                // 矩形区域：left=centerX-radius, top=centerY-radius, right=centerX, bottom=centerY
+                path.addRect(centerX - radius, centerY - radius, centerX, centerY, Path.Direction.CW);
             }
+            
+            canvas.drawPath(path, mHandlePaint);
         }
         
         @Override
@@ -1179,10 +1200,12 @@ public class OcrImageView extends FrameLayout {
             }
             
             OcrChar startChar = mCharList.get(mStartIndex);
-            float handleX = startChar.rect.left;
-            float handleY = startChar.rect.bottom;
+            float radius = mHandleSize / 2f;
+            // 计算新的圆心位置：锚点左下偏移
+            float centerX = startChar.rect.left - radius;
+            float centerY = startChar.rect.bottom + radius;
             
-            return isPointInCircle(x, y, handleX, handleY, mHandleSize);
+            return isPointInCircle(x, y, centerX, centerY, mHandleSize);
         }
         
         /**
@@ -1194,10 +1217,12 @@ public class OcrImageView extends FrameLayout {
             }
             
             OcrChar endChar = mCharList.get(mEndIndex);
-            float handleX = endChar.rect.right;
-            float handleY = endChar.rect.bottom;
+            float radius = mHandleSize / 2f;
+            // 计算新的圆心位置：锚点右下偏移
+            float centerX = endChar.rect.right + radius;
+            float centerY = endChar.rect.bottom + radius;
             
-            return isPointInCircle(x, y, handleX, handleY, mHandleSize);
+            return isPointInCircle(x, y, centerX, centerY, mHandleSize);
         }
         
         /**
