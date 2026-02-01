@@ -954,124 +954,110 @@ public class MainActivity extends AppCompatActivity {
         boolean merged;
         do {
             merged = false;
-            for (int i = 0; i < mergedResults.size() - 1; ) {
+            // 使用标签跳出外层循环
+            outerLoop:
+            for (int i = 0; i < mergedResults.size() - 1; i++) {
                 RecResult current = mergedResults.get(i);
-                RecResult next = mergedResults.get(i + 1);
                 
-                // 如果当前框或下一个框已经是最终框，跳过合并
-                if (current.isFinalBox() || next.isFinalBox()) {
-                    i++;
+                // 如果当前框已经是最终框，跳过
+                if (current.isFinalBox()) {
                     continue;
                 }
                 
                 Point[] currentBox = current.getDtBoxes();
-                Point[] nextBox = next.getDtBoxes();
                 
                 // 检查句末终止分隔符开关
                 if (swSentenceEndTerminator.isChecked()) {
-                    // 获取上方框的文本
-                    RecResult upperBox, lowerBox;
-                    if (getBoxTop(currentBox) < getBoxTop(nextBox)) {
-                        upperBox = current;
-                        lowerBox = next;
-                    } else {
-                        upperBox = next;
-                        lowerBox = current;
-                    }
-                    
-                    // 检查上方框文本是否以句末终止符结尾
-                    String upperText = upperBox.getText().trim();
-                    if (!upperText.isEmpty()) {
-                        char lastChar = upperText.charAt(upperText.length() - 1);
-                        // 定义句末终止分隔符列表（包含不同语言的句末符号，排除逗号）
-                        // 包括：句号、感叹号、问号、分号中文标点，以及西班牙语的问号/感叹号
+                    // 检查当前框文本是否以句末终止符结尾
+                    String currentText = current.getText().trim();
+                    if (!currentText.isEmpty()) {
+                        char lastChar = currentText.charAt(currentText.length() - 1);
                         if (".!?;。！？；¿¡".indexOf(lastChar) >= 0) {
-                            // 如果上方框文本以句末终止符结尾，不合并，直接标记为最终框
-                            upperBox.setFinalBox(true);
-//                            lowerBox.setFinalBox(true);
-                            i++;
-                            continue;
+                            // 如果文本以句末终止符结尾，不合并，直接标记为最终框
+                            current.setFinalBox(true);
+                            continue; // 跳过当前框，继续下一个
                         }
                     }
                 }
                 
-                // 计算框的高度
-                double currentHeight = getBoxBottom(currentBox) - getBoxTop(currentBox);
-                double nextHeight = getBoxBottom(nextBox) - getBoxTop(nextBox);
-                
-                // 计算框之间的距离（next在current下方）
-                double distance = getBoxTop(nextBox) - getBoxBottom(currentBox);
-                
-                // 检查距离是否在阈值内（距离占平均高度的百分比）
-                boolean distanceWithinThreshold = distance <= avgHeight * verticalDistanceThreshold;
-                
-                // 检查左侧x坐标差值是否在阈值内
-                double currentLeft = getBoxLeft(currentBox);
-                double currentRight = getBoxRight(currentBox);
-                double nextLeft = getBoxLeft(nextBox);
-                double nextRight = getBoxRight(nextBox);
-                double leftDiff = Math.abs(currentLeft - nextLeft);
-                
-                // 计算两个框的平均宽度
-                double currentWidth = getBoxWidth(currentBox);
-                double nextWidth = getBoxWidth(nextBox);
-                double avgWidth = (currentWidth + nextWidth) / 2.0;
-                
-                // 检查左侧差值是否在阈值内（差值占平均宽度的百分比）
-                boolean leftDiffWithinThreshold = leftDiff <= avgWidth * leftDiffThreshold;
-                
-                // 计算横向重叠度
-                // 确定哪个框在上方
-                boolean currentOnTop = getBoxTop(currentBox) < getBoxTop(nextBox);
-                
-                // 获取上方框的宽度
-                double topBoxWidth = currentOnTop ? currentWidth : nextWidth;
-                
-                // 计算两个框的最大宽度
-                double maxBoxWidth = Math.max(currentWidth, nextWidth);
-                
-                // 计算重叠度百分比：上方框的宽度在最大宽度的占比
-                double overlapRatio = maxBoxWidth > 0 ? topBoxWidth / maxBoxWidth : 0.0;
-                
-                // 检查横向重叠度是否在阈值内
-                boolean overlapWithinThreshold = overlapRatio >= horizontalOverlapThreshold;
-                
-                // 如果所有条件都满足，合并这两个框
-                if (distanceWithinThreshold && leftDiffWithinThreshold && overlapWithinThreshold) {
-                    RecResult mergedBox = mergeTwoBoxes(current, next);
+                // 内层循环寻找可以合并的下一个框
+                for (int j = i + 1; j < mergedResults.size(); j++) {
+                    RecResult next = mergedResults.get(j);
                     
-                    // 计算靠下的框的宽度在两个框最大宽度的百分比
-                    double bottomBoxWidth;
-                    if (getBoxTop(currentBox) < getBoxTop(nextBox)) {
-                        // current在上方，next在下方
-                        bottomBoxWidth = nextWidth;
-                    } else {
-                        // next在上方，current在下方
-                        bottomBoxWidth = currentWidth;
+                    // 如果下一个框已经是最终框，跳过
+                    if (next.isFinalBox()) {
+                        continue;
                     }
                     
-                    double widthRatio = bottomBoxWidth / maxBoxWidth;
+                    Point[] nextBox = next.getDtBoxes();
                     
-                    // 如果百分比低于阈值，标记为最终框
-                    if (widthRatio < bottomWidthRatioThreshold) {
-                        mergedBox.setFinalBox(true);
+                    // 计算框之间的距离（next在current下方）
+                    double distance = getBoxTop(nextBox) - getBoxBottom(currentBox);
+                    
+                    // 检查距离是否在阈值内（距离占平均高度的百分比）
+                    // 如果距离超过阈值，由于列表是按Top排序的，后续的框只会更远，所以可以提前结束内层循环
+                    if (distance > avgHeight * verticalDistanceThreshold) {
+                        break;
                     }
                     
-                    // 移除原来的两个框
-                    mergedResults.remove(i + 1);
-                    mergedResults.remove(i);
+                    boolean distanceWithinThreshold = true; // 既然没有break，说明在阈值内
                     
-                    // 添加合并后的框
-                    mergedResults.add(i, mergedBox);
+                    // 检查左侧x坐标差值是否在阈值内
+                    double currentLeft = getBoxLeft(currentBox);
+                    double nextLeft = getBoxLeft(nextBox);
+                    double leftDiff = Math.abs(currentLeft - nextLeft);
                     
-                    // 标记有合并发生
-                    merged = true;
+                    // 计算两个框的平均宽度
+                    double currentWidth = getBoxWidth(currentBox);
+                    double nextWidth = getBoxWidth(nextBox);
+                    double avgWidth = (currentWidth + nextWidth) / 2.0;
                     
-                    // 重新开始遍历，因为合并后的框可能还能与下一个框合并
-                    break;
-                } else {
-                    // 没有合并，继续检查下一个框
-                    i++;
+                    // 检查左侧差值是否在阈值内（差值占平均宽度的百分比）
+                    boolean leftDiffWithinThreshold = leftDiff <= avgWidth * leftDiffThreshold;
+                    
+                    // 计算横向重叠度
+                    // 确定哪个框在上方
+                    boolean currentOnTop = getBoxTop(currentBox) < getBoxTop(nextBox);
+                    
+                    // 获取上方框的宽度
+                    double topBoxWidth = currentOnTop ? currentWidth : nextWidth;
+                    
+                    // 计算两个框的最大宽度
+                    double maxBoxWidth = Math.max(currentWidth, nextWidth);
+                    
+                    // 计算重叠度百分比：上方框的宽度在最大宽度的占比
+                    double overlapRatio = maxBoxWidth > 0 ? topBoxWidth / maxBoxWidth : 0.0;
+                    
+                    // 检查横向重叠度是否在阈值内
+                    boolean overlapWithinThreshold = overlapRatio >= horizontalOverlapThreshold;
+                    
+                    // 如果所有条件都满足，合并这两个框
+                    if (distanceWithinThreshold && leftDiffWithinThreshold && overlapWithinThreshold) {
+                        RecResult mergedBox = mergeTwoBoxes(current, next);
+                        
+                        // 计算靠下的框的宽度在两个框最大宽度的百分比
+                        double bottomBoxWidth = currentOnTop ? nextWidth : currentWidth;
+                        
+                        double widthRatio = bottomBoxWidth / maxBoxWidth;
+                        
+                        // 如果百分比低于阈值，标记为最终框
+                        if (widthRatio < bottomWidthRatioThreshold) {
+                            mergedBox.setFinalBox(true);
+                        }
+                        
+                        // 移除原来的两个框 (先移除索引大的)
+                        mergedResults.remove(j);
+                        mergedResults.remove(i);
+                        
+                        // 添加合并后的框
+                        mergedResults.add(i, mergedBox);
+                        
+                        // 标记有合并发生
+                        merged = true;
+                        
+                        // 重新开始遍历，因为合并后的框可能还能与下一个框合并
+                        break outerLoop;
+                    }
                 }
             }
         } while (merged);
