@@ -592,9 +592,13 @@ public class OcrImageView extends FrameLayout {
                     // 1. 判断是否按到了手柄
                     if (isTouchingStartHandle(x, y)) {
                         mDraggingHandle = HandleType.START;
+                        // 禁止父视图拦截触摸事件
+                        getParent().requestDisallowInterceptTouchEvent(true);
                         return true;
                     } else if (isTouchingEndHandle(x, y)) {
                         mDraggingHandle = HandleType.END;
+                        // 禁止父视图拦截触摸事件
+                        getParent().requestDisallowInterceptTouchEvent(true);
                         return true;
                     }
                     break;
@@ -608,10 +612,14 @@ public class OcrImageView extends FrameLayout {
                             // 如果是拖拽状态，更新对应索引
                             if (mDraggingHandle == HandleType.START) {
                                 mStartIndex = targetIndex;
+                                // 禁止父视图拦截触摸事件
+                                getParent().requestDisallowInterceptTouchEvent(true);
                                 invalidate();
                                 return true;
                             } else if (mDraggingHandle == HandleType.END) {
                                 mEndIndex = targetIndex;
+                                // 禁止父视图拦截触摸事件
+                                getParent().requestDisallowInterceptTouchEvent(true);
                                 invalidate();
                                 return true;
                             } else {
@@ -619,16 +627,22 @@ public class OcrImageView extends FrameLayout {
                                 if (isTouchingStartHandle(x, y)) {
                                     mDraggingHandle = HandleType.START;
                                     mStartIndex = targetIndex;
+                                    // 禁止父视图拦截触摸事件
+                                    getParent().requestDisallowInterceptTouchEvent(true);
                                     invalidate();
                                     return true;
                                 } else if (isTouchingEndHandle(x, y)) {
                                     mDraggingHandle = HandleType.END;
                                     mEndIndex = targetIndex;
+                                    // 禁止父视图拦截触摸事件
+                                    getParent().requestDisallowInterceptTouchEvent(true);
                                     invalidate();
                                     return true;
                                 } else {
                                     // 更新结束索引，实现自由滑动选择
                                     mEndIndex = targetIndex;
+                                    // 禁止父视图拦截触摸事件
+                                    getParent().requestDisallowInterceptTouchEvent(true);
                                     invalidate();
                                     return true;
                                 }
