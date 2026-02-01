@@ -186,107 +186,79 @@ public class OcrImageView extends FrameLayout {
                     mTextViews.add(textView);
                     mTextContainer.addView(textView);
                     
-                    // 扁平化OCR结果为字符列表
-                    WordBoxResult wordBoxResult = result.getWordBoxResult();
-                    if (wordBoxResult != null) {
-                        List<String> wordBoxContentList = wordBoxResult.getWordBoxContentList();
-                        List<Point[]> sortedWordBoxList = wordBoxResult.getSortedWordBoxList();
-                        
-                        if (wordBoxContentList != null && sortedWordBoxList != null && 
-                            wordBoxContentList.size() == sortedWordBoxList.size()) {
-                            for (int i = 0; i < wordBoxContentList.size(); i++) {
-                                String content = wordBoxContentList.get(i);
-                                Point[] wordBox = sortedWordBoxList.get(i);
-                                
-                                if (wordBox != null && wordBox.length >= 4) {
-                                    // 计算字符框的最小外接矩形
-                                    float charLeft = Float.MAX_VALUE;
-                                    float charTop = Float.MAX_VALUE;
-                                    float charRight = Float.MIN_VALUE;
-                                    float charBottom = Float.MIN_VALUE;
-                                    
-                                    for (Point point : wordBox) {
-                                        // 应用缩放比例并加上偏移量
-                                        float scaledX = (float) point.x * scale + offsetX;
-                                        float scaledY = (float) point.y * scale + offsetY;
-                                        
-                                        charLeft = Math.min(charLeft, scaledX);
-                                        charTop = Math.min(charTop, scaledY);
-                                        charRight = Math.max(charRight, scaledX);
-                                        charBottom = Math.max(charBottom, scaledY);
-                                    }
-                                    
-                                    // 创建OcrChar对象
-                                    RectF charRect = new RectF(charLeft, charTop, charRight, charBottom);
-                                    OcrChar ocrChar = new OcrChar(content, charRect, charIndex);
-                                    mCharList.add(ocrChar);
-                                    charIndex++;
-                                }
-                            }
-                        }
-                    } else {
-                        // 如果没有WordBoxResult，则使用文本框作为字符框
-                        String text = result.getText();
-                        if (text != null) {
-                            // 检查是否有换行符，处理多行RecResult
-                            String[] lines = text.split("\n");
-                            int lineCount = lines.length;
-                            
-                            if (lineCount > 1) {
-                                // 多行处理：按行数平分高度
-                                float lineHeight = (bottom - top) / (float) lineCount;
-                                
-                                for (int lineIndex = 0; lineIndex < lineCount; lineIndex++) {
-                                    String lineText = lines[lineIndex];
-                                    float lineTop = top + lineIndex * lineHeight;
-                                    float lineBottom = lineTop + lineHeight;
-                                    
-                                    // 处理行内字符
-                                    if (lineText.length() > 0) {
-                                        float charWidth = (right - left) / (float) lineText.length();
-                                        for (int i = 0; i < lineText.length(); i++) {
-                                            char c = lineText.charAt(i);
-                                            float charLeft = left + i * charWidth;
-                                            float charRight = charLeft + charWidth;
-                                            RectF charRect = new RectF(charLeft, lineTop, charRight, lineBottom);
-                                            OcrChar ocrChar = new OcrChar(String.valueOf(c), charRect, charIndex);
-                                            mCharList.add(ocrChar);
-                                            charIndex++;
-                                        }
-                                    }
-                                    
-                                    // 如果不是最后一行，添加一个代表换行符的OcrChar
-                                    // 这样在复制时可以保留换行，且保持index连续
-                                    if (lineIndex < lineCount - 1) {
-                                        float lineEnd = right;
-                                        // 换行符宽高设为0或者极小，位置在行末
-                                        RectF newlineRect = new RectF(lineEnd, lineTop, lineEnd, lineBottom);
-                                        mCharList.add(new OcrChar("\n", newlineRect, charIndex++));
-                                    }
-                                }
-                            } else {
-                                // 单行处理（原有逻辑）
-                                float charWidth = (right - left) / (float) text.length();
-                                for (int i = 0; i < text.length(); i++) {
-                                    char c = text.charAt(i);
-                                    float charLeft = left + i * charWidth;
-                                    float charRight = charLeft + charWidth;
-                                    RectF charRect = new RectF(charLeft, top, charRight, bottom);
-                                    OcrChar ocrChar = new OcrChar(String.valueOf(c), charRect, charIndex);
-                                    mCharList.add(ocrChar);
-                                    charIndex++;
-                                }
-                            }
-                        }
-                    }
+                    // 扁平化OCR结果为字符列表的逻辑已移除，改为在布局完成后从TextView获取
                 }
             }
             
-            // 将字符列表传递给LensSelectView
-            mLensSelectView.setCharList(mCharList);
+            // 等待布局完成后，从TextView获取字符位置信息，确保选择区域与显示文本完全对应
+            mTextContainer.getViewTreeObserver().addOnGlobalLayoutListener(new android.view.ViewTreeObserver.OnGlobalLayoutListener() {
+                @Override
+                public void onGlobalLayout() {
+                    mTextContainer.getViewTreeObserver().removeOnGlobalLayoutListener(this);
+                    populateCharListFromViews();
+                }
+            });
+
         }
     }
     
+    /**
+     * 从TextView中提取字符位置信息，填充mCharList
+     */
+    private void populateCharListFromViews() {
+        mCharList.clear();
+        int globalIndex = 0;
+        
+        for (TextView textView : mTextViews) {
+            android.text.Layout layout = textView.getLayout();
+            if (layout == null) {
+                continue;
+            }
+            
+            String text = textView.getText().toString();
+            float tvLeft = textView.getLeft();
+            float tvTop = textView.getTop();
+            Paint paint = textView.getPaint();
+            
+            for (int i = 0; i < text.length(); i++) {
+                char c = text.charAt(i);
+                String charStr = String.valueOf(c);
+                
+                int line = layout.getLineForOffset(i);
+                float lineTop = layout.getLineTop(line);
+                float lineBottom = layout.getLineBottom(line);
+                
+                RectF charRect;
+                if (c == '\n') {
+                    // 换行符，位置在行末，宽度为0
+                    float lineRight = layout.getLineRight(line);
+                    charRect = new RectF(tvLeft + lineRight, tvTop + lineTop, tvLeft + lineRight, tvTop + lineBottom);
+                } else {
+                    float left = layout.getPrimaryHorizontal(i);
+                    float right;
+                    
+                    // 尝试获取下一个字符的位置作为当前字符的右边界
+                    if (i + 1 < text.length() && layout.getLineForOffset(i + 1) == line) {
+                        right = layout.getPrimaryHorizontal(i + 1);
+                    } else {
+                        // 行末或最后一个字符，通过测量获取宽度
+                        float charWidth = paint.measureText(text, i, i + 1);
+                        right = left + charWidth;
+                    }
+                    
+                    // 修正：Layout.getPrimaryHorizontal返回的是相对于TextView内容的坐标
+                    // 需要加上TextView的左上角坐标
+                    charRect = new RectF(tvLeft + left, tvTop + lineTop, tvLeft + right, tvTop + lineBottom);
+                }
+                
+                mCharList.add(new OcrChar(charStr, charRect, globalIndex++));
+            }
+        }
+        
+        // 更新LensSelectView的数据
+        mLensSelectView.setCharList(mCharList);
+    }
+
     /**
      * 清除OCR结果
      */
