@@ -46,7 +46,7 @@ public class OcrImageView extends FrameLayout {
     private Paint mDebugPaint; // 仅用于调试，显示文本框边界
     
     private boolean mTextVisible = true; // 文本及阴影背景的可见性
-    private float mTextOpacity = 0.5f; // 文本及阴影背景的透明度 (0.0 - 1.0)
+    private float mTextOpacity = 1.0f; // 文本及阴影背景的透明度 (-1.0 - 1.0)
     
     // 坐标映射相关
     private float mScaleFactor;
@@ -411,30 +411,53 @@ public class OcrImageView extends FrameLayout {
         // 设置可见性
         textView.setVisibility(mTextVisible ? View.VISIBLE : View.GONE);
         
-        // 获取原始背景颜色 (如果有)
-        int bgColor = Color.BLACK; // 默认黑色
+        // 获取原始背景颜色和文字颜色
+        int extractedBgColor = Color.BLACK; // 默认黑色
+        int extractedTextColor = Color.WHITE; // 默认白色
         Object tag = textView.getTag();
         if (tag instanceof int[]) {
             int[] colors = (int[]) tag;
             if (colors.length >= 2) {
-                bgColor = colors[0];
+                extractedBgColor = colors[0];
+                extractedTextColor = colors[1];
             }
         }
         
-        // 设置背景透明度
-        int alpha = (int) (mTextOpacity * 255);
-        textView.setBackgroundColor(Color.argb(alpha, Color.red(bgColor), Color.green(bgColor), Color.blue(bgColor)));
-        
-        // 更新阴影效果的可见性
-        if (mTextVisible) {
-            // 如果使用了提取的颜色，稍微减弱阴影，避免太突兀
-            if (bgColor != Color.BLACK) {
-                textView.setShadowLayer(1f, 0.5f, 0.5f, isDark(bgColor) ? Color.BLACK : Color.GRAY);
-            } else {
+        // 根据透明度模式设置背景颜色和文字颜色
+        // mTextOpacity > 0: 使用提取的背景色，完全不透明
+        // mTextOpacity <= 0: 使用黑色背景，根据值计算透明度
+        if (mTextOpacity > 0) {
+            // 模式1：取色背景，完全不透明
+            textView.setBackgroundColor(Color.rgb(Color.red(extractedBgColor), Color.green(extractedBgColor), Color.blue(extractedBgColor)));
+            // 恢复提取的文字颜色
+            textView.setTextColor(extractedTextColor);
+            
+            // 如果使用了提取的颜色，稍微减弱阴影
+            if (mTextVisible && extractedBgColor != Color.BLACK) {
+                textView.setShadowLayer(1f, 0.5f, 0.5f, isDark(extractedBgColor) ? Color.BLACK : Color.GRAY);
+            } else if (mTextVisible) {
                 textView.setShadowLayer(2f, 1f, 1f, Color.BLACK);
+            } else {
+                textView.setShadowLayer(0f, 0f, 0f, Color.TRANSPARENT);
             }
         } else {
-            textView.setShadowLayer(0f, 0f, 0f, Color.TRANSPARENT);
+            // 模式2：黑色阴影，可变透明度
+            // -1.0 (完全透明) -> 0.0 (完全不透明黑色)
+            // 映射公式：alpha = (val + 1) * 255
+            int alpha = (int) ((mTextOpacity + 1) * 255);
+            // 限制alpha在0-255之间
+            alpha = Math.max(0, Math.min(255, alpha));
+            
+            textView.setBackgroundColor(Color.argb(alpha, 0, 0, 0));
+            // 阴影模式下，强制文字颜色为白色，确保在深色阴影上清晰可见
+            textView.setTextColor(Color.WHITE);
+            
+            // 黑色背景模式下，始终保持标准阴影
+            if (mTextVisible) {
+                textView.setShadowLayer(2f, 1f, 1f, Color.BLACK);
+            } else {
+                textView.setShadowLayer(0f, 0f, 0f, Color.TRANSPARENT);
+            }
         }
     }
     
@@ -460,8 +483,8 @@ public class OcrImageView extends FrameLayout {
      * @param opacity 透明度值（0.0 - 1.0）
      */
     public void setTextOpacity(float opacity) {
-        // 确保透明度在0.0到1.0之间
-        mTextOpacity = Math.max(0.0f, Math.min(1.0f, opacity));
+        // 确保透明度在-1.0到1.0之间
+        mTextOpacity = Math.max(-1.0f, Math.min(1.0f, opacity));
         for (TextView textView : mTextViews) {
             updateTextViewAppearance(textView);
         }

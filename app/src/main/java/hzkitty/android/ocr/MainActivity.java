@@ -141,8 +141,11 @@ public class MainActivity extends AppCompatActivity {
         sbTextOpacity.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                // 将进度值（0-100）转换为透明度值（0.0-1.0）
-                float opacity = progress / 100.0f;
+                // 将进度值（0-100）转换为透明度值（-1.0-1.0）
+                // 0 -> -1.0
+                // 50 -> 0.0
+                // 100 -> 1.0
+                float opacity = (progress / 50.0f) - 1.0f;
                 ivSelectedImage.setTextOpacity(opacity);
             }
             
@@ -354,6 +357,8 @@ public class MainActivity extends AppCompatActivity {
         rgDetModel = findViewById(R.id.rg_det_model);
         swTextVisible = findViewById(R.id.sw_text_visible);
         sbTextOpacity = findViewById(R.id.sb_text_opacity);
+        // 设置默认进度为100（对应 opacity 1.0）
+        sbTextOpacity.setProgress(100);
         swMergeText = findViewById(R.id.sw_merge_text);
         swHorizontalMerge = findViewById(R.id.sw_horizontal_merge);
         sbMergeThreshold = findViewById(R.id.sb_merge_threshold);
