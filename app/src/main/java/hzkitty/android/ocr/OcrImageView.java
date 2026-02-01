@@ -5,11 +5,17 @@ import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.Path;
-import org.opencv.core.Point;
 import android.graphics.Rect;
+import android.graphics.RectF;
+import android.graphics.drawable.Drawable;
 import android.util.AttributeSet;
+import android.view.ActionMode;
+import android.view.GestureDetector;
+import android.view.Menu;
+import android.view.MenuItem;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewConfiguration;
@@ -24,19 +30,41 @@ import java.util.ArrayList;
 import java.util.List;
 
 import io.github.hzkitty.entity.RecResult;
+import io.github.hzkitty.entity.WordBoxResult;
+import org.opencv.core.Point;
 import androidx.core.widget.TextViewCompat;
 
-public class OcrImageView extends RelativeLayout {
+public class OcrImageView extends FrameLayout {
     private ImageView mImageView;
     private FrameLayout mTextContainer;
+    private LensSelectView mLensSelectView;
     private Bitmap mBitmap;
     private List<RecResult> mOcrResults;
     private List<TextView> mTextViews;
+    private List<OcrChar> mCharList;
     
     private Paint mDebugPaint; // 仅用于调试，显示文本框边界
     
     private boolean mTextVisible = true; // 文本及阴影背景的可见性
     private float mTextOpacity = 0.5f; // 文本及阴影背景的透明度 (0.0 - 1.0)
+    
+    // 坐标映射相关
+    private float mScaleFactor;
+    private float mOffsetX;
+    private float mOffsetY;
+    
+    // 字符数据结构
+    private static class OcrChar {
+        String charText;
+        RectF rect;
+        int index;
+        
+        OcrChar(String charText, RectF rect, int index) {
+            this.charText = charText;
+            this.rect = rect;
+            this.index = index;
+        }
+    }
     
     public OcrImageView(Context context) {
         super(context);
@@ -57,6 +85,7 @@ public class OcrImageView extends RelativeLayout {
         // 初始化子视图
         mImageView = new ImageView(getContext());
         mTextContainer = new FrameLayout(getContext());
+        mLensSelectView = new LensSelectView(getContext());
         
         // 设置ImageView参数
         mImageView.setScaleType(ImageView.ScaleType.FIT_CENTER);
@@ -72,9 +101,15 @@ public class OcrImageView extends RelativeLayout {
         mTextContainer.setClipChildren(false);
         mTextContainer.setClipToPadding(false);
         
+        // 设置LensSelectView参数
+        mLensSelectView.setLayoutParams(new RelativeLayout.LayoutParams(
+                RelativeLayout.LayoutParams.MATCH_PARENT,
+                RelativeLayout.LayoutParams.MATCH_PARENT));
+        
         // 将子视图添加到容器中
         addView(mImageView);
         addView(mTextContainer);
+        addView(mLensSelectView);
         
         // 初始化调试画笔（可选）
         mDebugPaint = new Paint();
@@ -84,6 +119,7 @@ public class OcrImageView extends RelativeLayout {
         // 初始化变量
         mOcrResults = new ArrayList<>();
         mTextViews = new ArrayList<>();
+        mCharList = new ArrayList<>();
     }
     
     public void setImageBitmap(Bitmap bitmap) {
@@ -118,7 +154,13 @@ public class OcrImageView extends RelativeLayout {
             int offsetX = (viewWidth - scaledImageWidth) / 2;
             int offsetY = (viewHeight - scaledImageHeight) / 2;
             
+            // 保存坐标映射参数
+            mScaleFactor = scale;
+            mOffsetX = offsetX;
+            mOffsetY = offsetY;
+            
             // 转换OCR结果的坐标到视图坐标系
+            int charIndex = 0;
             for (RecResult result : results) {
                 Point[] box = result.getDtBoxes();
                 if (box != null && box.length >= 4) {
@@ -143,8 +185,66 @@ public class OcrImageView extends RelativeLayout {
                     TextView textView = createTextView(result.getText(), new Rect(left, top, right, bottom));
                     mTextViews.add(textView);
                     mTextContainer.addView(textView);
+                    
+                    // 扁平化OCR结果为字符列表
+                    WordBoxResult wordBoxResult = result.getWordBoxResult();
+                    if (wordBoxResult != null) {
+                        List<String> wordBoxContentList = wordBoxResult.getWordBoxContentList();
+                        List<Point[]> sortedWordBoxList = wordBoxResult.getSortedWordBoxList();
+                        
+                        if (wordBoxContentList != null && sortedWordBoxList != null && 
+                            wordBoxContentList.size() == sortedWordBoxList.size()) {
+                            for (int i = 0; i < wordBoxContentList.size(); i++) {
+                                String content = wordBoxContentList.get(i);
+                                Point[] wordBox = sortedWordBoxList.get(i);
+                                
+                                if (wordBox != null && wordBox.length >= 4) {
+                                    // 计算字符框的最小外接矩形
+                                    float charLeft = Float.MAX_VALUE;
+                                    float charTop = Float.MAX_VALUE;
+                                    float charRight = Float.MIN_VALUE;
+                                    float charBottom = Float.MIN_VALUE;
+                                    
+                                    for (Point point : wordBox) {
+                                        // 应用缩放比例并加上偏移量
+                                        float scaledX = (float) point.x * scale + offsetX;
+                                        float scaledY = (float) point.y * scale + offsetY;
+                                        
+                                        charLeft = Math.min(charLeft, scaledX);
+                                        charTop = Math.min(charTop, scaledY);
+                                        charRight = Math.max(charRight, scaledX);
+                                        charBottom = Math.max(charBottom, scaledY);
+                                    }
+                                    
+                                    // 创建OcrChar对象
+                                    RectF charRect = new RectF(charLeft, charTop, charRight, charBottom);
+                                    OcrChar ocrChar = new OcrChar(content, charRect, charIndex);
+                                    mCharList.add(ocrChar);
+                                    charIndex++;
+                                }
+                            }
+                        }
+                    } else {
+                        // 如果没有WordBoxResult，则使用文本框作为字符框
+                        String text = result.getText();
+                        if (text != null) {
+                            float charWidth = (right - left) / (float) text.length();
+                            for (int i = 0; i < text.length(); i++) {
+                                char c = text.charAt(i);
+                                float charLeft = left + i * charWidth;
+                                float charRight = charLeft + charWidth;
+                                RectF charRect = new RectF(charLeft, top, charRight, bottom);
+                                OcrChar ocrChar = new OcrChar(String.valueOf(c), charRect, charIndex);
+                                mCharList.add(ocrChar);
+                                charIndex++;
+                            }
+                        }
+                    }
                 }
             }
+            
+            // 将字符列表传递给LensSelectView
+            mLensSelectView.setCharList(mCharList);
         }
     }
     
@@ -154,7 +254,9 @@ public class OcrImageView extends RelativeLayout {
     public void clearOcrResults() {
         mOcrResults.clear();
         mTextViews.clear();
+        mCharList.clear();
         mTextContainer.removeAllViews();
+        mLensSelectView.clearSelection();
     }
     
     /**
@@ -324,5 +426,404 @@ public class OcrImageView extends RelativeLayout {
      */
     public float getTextOpacity() {
         return mTextOpacity;
+    }
+    
+    /**
+     * 自定义文本选择视图，实现类似Google Lens的文本选择功能
+     */
+    private class LensSelectView extends View {
+        // 数据源
+        private List<OcrChar> mCharList = new ArrayList<>();
+        
+        // 选中状态
+        private int mStartIndex = -1;
+        private int mEndIndex = -1;
+        
+        // 拖拽状态
+        private HandleType mDraggingHandle = HandleType.NONE;
+        
+        // 手柄类型枚举
+        private enum HandleType {
+            NONE, START, END
+        }
+        
+        // 画笔与资源
+        private final Paint mHighlightPaint;
+        private final Paint mHandlePaint;
+        private Drawable mStartHandleDrawable;
+        private Drawable mEndHandleDrawable;
+        private final int mHandleSize;
+        
+        // 菜单相关
+        private ActionMode mActionMode;
+        
+        // 手势检测
+        private GestureDetector mGestureDetector;
+        
+        public LensSelectView(Context context) {
+            super(context);
+            
+            // 初始化画笔
+            mHighlightPaint = new Paint();
+            mHighlightPaint.setColor(Color.parseColor("#6633B5E5")); // 半透明蓝
+            mHighlightPaint.setStyle(Paint.Style.FILL);
+            
+            mHandlePaint = new Paint();
+            mHandlePaint.setColor(Color.WHITE);
+            mHandlePaint.setStyle(Paint.Style.FILL);
+            mHandlePaint.setAntiAlias(true);
+            
+            // 初始化手柄资源 - 使用默认绘制，不加载外部资源
+            mStartHandleDrawable = null;
+            mEndHandleDrawable = null;
+            
+            // 手柄大小
+            mHandleSize = dpToPx(context, 20);
+            
+            // 初始化手势检测器
+            mGestureDetector = new GestureDetector(context, new GestureDetector.SimpleOnGestureListener() {
+                @Override
+                public void onLongPress(MotionEvent e) {
+                    // 长按开始选择
+                    float x = e.getX();
+                    float y = e.getY();
+                    int closestIndex = getClosestCharIndex(x, y);
+                    if (closestIndex != -1) {
+                        mStartIndex = closestIndex;
+                        mEndIndex = closestIndex;
+                        invalidate();
+                        // 显示操作菜单
+                        showActionMenu();
+                    }
+                }
+            });
+            
+            // 设置可触摸
+            setFocusable(true);
+            setFocusableInTouchMode(true);
+            setClickable(true);
+            setLongClickable(true);
+        }
+        
+        /**
+         * 设置字符列表
+         */
+        public void setCharList(List<OcrChar> charList) {
+            mCharList = charList;
+            invalidate();
+        }
+        
+        /**
+         * 清除选择
+         */
+        public void clearSelection() {
+            mStartIndex = -1;
+            mEndIndex = -1;
+            mDraggingHandle = HandleType.NONE;
+            if (mActionMode != null) {
+                mActionMode.finish();
+                mActionMode = null;
+            }
+            invalidate();
+        }
+        
+        @Override
+        protected void onDraw(Canvas canvas) {
+            super.onDraw(canvas);
+            
+            if (mStartIndex == -1 || mEndIndex == -1 || mCharList.isEmpty()) {
+                return;
+            }
+            
+            // 1. 绘制高亮背景
+            int start = Math.min(mStartIndex, mEndIndex);
+            int end = Math.max(mStartIndex, mEndIndex);
+            
+            for (int i = start; i <= end && i < mCharList.size(); i++) {
+                OcrChar ocrChar = mCharList.get(i);
+                canvas.drawRect(ocrChar.rect, mHighlightPaint);
+            }
+            
+            // 2. 绘制开始手柄
+            if (start < mCharList.size()) {
+                OcrChar startChar = mCharList.get(start);
+                drawHandle(canvas, mStartHandleDrawable, startChar.rect.left, startChar.rect.bottom);
+            }
+            
+            // 3. 绘制结束手柄
+            if (end < mCharList.size()) {
+                OcrChar endChar = mCharList.get(end);
+                drawHandle(canvas, mEndHandleDrawable, endChar.rect.right, endChar.rect.bottom);
+            }
+        }
+        
+        /**
+         * 绘制手柄
+         */
+        private void drawHandle(Canvas canvas, Drawable drawable, float x, float y) {
+            float centerX = x;
+            float centerY = y;
+            
+            if (drawable != null) {
+                // 使用资源图片绘制手柄
+                int left = (int) (centerX - mHandleSize / 2);
+                int top = (int) (centerY - mHandleSize / 2);
+                int right = left + mHandleSize;
+                int bottom = top + mHandleSize;
+                
+                drawable.setBounds(left, top, right, bottom);
+                drawable.draw(canvas);
+            } else {
+                // 绘制默认圆形手柄
+                canvas.drawCircle(centerX, centerY, mHandleSize / 2, mHandlePaint);
+            }
+        }
+        
+        @Override
+        public boolean onTouchEvent(MotionEvent event) {
+            // 将事件传递给手势检测器
+            boolean handledByGestureDetector = mGestureDetector.onTouchEvent(event);
+            
+            float x = event.getX();
+            float y = event.getY();
+            
+            switch (event.getAction()) {
+                case MotionEvent.ACTION_DOWN:
+                    // 1. 判断是否按到了手柄
+                    if (isTouchingStartHandle(x, y)) {
+                        mDraggingHandle = HandleType.START;
+                        return true;
+                    } else if (isTouchingEndHandle(x, y)) {
+                        mDraggingHandle = HandleType.END;
+                        return true;
+                    }
+                    break;
+                    
+                case MotionEvent.ACTION_MOVE:
+                    // 2. 处理拖拽逻辑
+                    if (mStartIndex != -1 && mEndIndex != -1) {
+                        int targetIndex = getClosestCharIndex(x, y);
+                        
+                        if (targetIndex != -1) {
+                            // 如果是拖拽状态，更新对应索引
+                            if (mDraggingHandle == HandleType.START) {
+                                mStartIndex = targetIndex;
+                                invalidate();
+                                return true;
+                            } else if (mDraggingHandle == HandleType.END) {
+                                mEndIndex = targetIndex;
+                                invalidate();
+                                return true;
+                            } else {
+                                // 如果不是拖拽状态，但有选择，判断是否要开始拖拽
+                                if (isTouchingStartHandle(x, y)) {
+                                    mDraggingHandle = HandleType.START;
+                                    mStartIndex = targetIndex;
+                                    invalidate();
+                                    return true;
+                                } else if (isTouchingEndHandle(x, y)) {
+                                    mDraggingHandle = HandleType.END;
+                                    mEndIndex = targetIndex;
+                                    invalidate();
+                                    return true;
+                                } else {
+                                    // 更新结束索引，实现自由滑动选择
+                                    mEndIndex = targetIndex;
+                                    invalidate();
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                    break;
+                    
+                case MotionEvent.ACTION_UP:
+                    // 3. 停止拖拽
+                    mDraggingHandle = HandleType.NONE;
+                    break;
+            }
+            
+            // 如果手势检测器已经处理了事件，或者当前视图处理了事件，返回true
+            return handledByGestureDetector || super.onTouchEvent(event);
+        }
+        
+        /**
+         * 判断是否触摸到开始手柄
+         */
+        private boolean isTouchingStartHandle(float x, float y) {
+            if (mStartIndex == -1 || mStartIndex >= mCharList.size()) {
+                return false;
+            }
+            
+            OcrChar startChar = mCharList.get(mStartIndex);
+            float handleX = startChar.rect.left;
+            float handleY = startChar.rect.bottom;
+            
+            return isPointInCircle(x, y, handleX, handleY, mHandleSize);
+        }
+        
+        /**
+         * 判断是否触摸到结束手柄
+         */
+        private boolean isTouchingEndHandle(float x, float y) {
+            if (mEndIndex == -1 || mEndIndex >= mCharList.size()) {
+                return false;
+            }
+            
+            OcrChar endChar = mCharList.get(mEndIndex);
+            float handleX = endChar.rect.right;
+            float handleY = endChar.rect.bottom;
+            
+            return isPointInCircle(x, y, handleX, handleY, mHandleSize);
+        }
+        
+        /**
+         * 判断点是否在圆形范围内
+         */
+        private boolean isPointInCircle(float pointX, float pointY, float circleX, float circleY, float radius) {
+            float dx = pointX - circleX;
+            float dy = pointY - circleY;
+            return dx * dx + dy * dy <= radius * radius;
+        }
+        
+        /**
+         * 获取距离触摸点最近的字符索引
+         */
+        private int getClosestCharIndex(float x, float y) {
+            if (mCharList.isEmpty()) {
+                return -1;
+            }
+            
+            int closestIndex = -1;
+            float minDistance = Float.MAX_VALUE;
+            
+            for (int i = 0; i < mCharList.size(); i++) {
+                OcrChar ocrChar = mCharList.get(i);
+                float distance = getDistanceToRect(x, y, ocrChar.rect);
+                
+                if (distance < minDistance) {
+                    minDistance = distance;
+                    closestIndex = i;
+                }
+            }
+            
+            // 如果距离太远，不选择
+            if (minDistance > mHandleSize * 3) {
+                return -1;
+            }
+            
+            return closestIndex;
+        }
+        
+        /**
+         * 计算点到矩形的距离
+         */
+        private float getDistanceToRect(float x, float y, RectF rect) {
+            float dx = Math.max(rect.left - x, Math.max(0, x - rect.right));
+            float dy = Math.max(rect.top - y, Math.max(0, y - rect.bottom));
+            return (float) Math.sqrt(dx * dx + dy * dy);
+        }
+        
+        /**
+         * 显示操作菜单
+         */
+        private void showActionMenu() {
+            if (mStartIndex == -1 || mEndIndex == -1) {
+                return;
+            }
+            
+            if (mActionMode == null) {
+                mActionMode = startActionMode(new ActionMode.Callback() {
+                    @Override
+                    public boolean onCreateActionMode(ActionMode mode, Menu menu) {
+                        menu.add(Menu.NONE, Menu.FIRST, Menu.NONE, "复制");
+                        menu.add(Menu.NONE, Menu.FIRST + 1, Menu.NONE, "全选");
+                        return true;
+                    }
+                    
+                    @Override
+                    public boolean onPrepareActionMode(ActionMode mode, Menu menu) {
+                        return false;
+                    }
+                    
+                    @Override
+                    public boolean onActionItemClicked(ActionMode mode, MenuItem item) {
+                        switch (item.getItemId()) {
+                            case Menu.FIRST:
+                                // 复制
+                                String selectedText = getSelectedString();
+                                copyToClipboard(selectedText);
+                                mode.finish();
+                                return true;
+                            case Menu.FIRST + 1:
+                                // 全选
+                                selectAll();
+                                return true;
+                            default:
+                                return false;
+                        }
+                    }
+                    
+                    @Override
+                    public void onDestroyActionMode(ActionMode mode) {
+                        mActionMode = null;
+                    }
+                });
+            }
+        }
+        
+        /**
+         * 获取选中的文本
+         */
+        private String getSelectedString() {
+            if (mStartIndex == -1 || mEndIndex == -1 || mCharList.isEmpty()) {
+                return "";
+            }
+            
+            int start = Math.min(mStartIndex, mEndIndex);
+            int end = Math.max(mStartIndex, mEndIndex);
+            
+            StringBuilder sb = new StringBuilder();
+            
+            for (int i = start; i <= end && i < mCharList.size(); i++) {
+                OcrChar ocrChar = mCharList.get(i);
+                sb.append(ocrChar.charText);
+            }
+            
+            return sb.toString();
+        }
+        
+        /**
+         * 复制文本到剪贴板
+         */
+        private void copyToClipboard(String text) {
+            android.content.ClipboardManager clipboard = 
+                    (android.content.ClipboardManager) getContext().getSystemService(Context.CLIPBOARD_SERVICE);
+            android.content.ClipData clip = android.content.ClipData.newPlainText("OCR Text", text);
+            clipboard.setPrimaryClip(clip);
+            
+            // 显示提示
+            Toast.makeText(getContext(), "已复制到剪贴板", Toast.LENGTH_SHORT).show();
+        }
+        
+        /**
+         * 全选文本
+         */
+        private void selectAll() {
+            if (mCharList.isEmpty()) {
+                return;
+            }
+            
+            mStartIndex = 0;
+            mEndIndex = mCharList.size() - 1;
+            invalidate();
+        }
+        
+        /**
+         * dp转px
+         */
+        private int dpToPx(Context context, int dp) {
+            return (int) (dp * context.getResources().getDisplayMetrics().density + 0.5f);
+        }
     }
 }
