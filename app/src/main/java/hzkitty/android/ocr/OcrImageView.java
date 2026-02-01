@@ -646,7 +646,17 @@ public class OcrImageView extends FrameLayout {
             super(context);
             
             // 初始化放大镜 (API 28+)
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                // API 29+ 使用Builder进行更多自定义
+                Magnifier.Builder builder = new Magnifier.Builder(this);
+                // 放大倍数增加 (默认约为1.25，用户要求放大1倍，即约2.5，这里设置为2.0f作为较好的体验)
+                builder.setInitialZoom(2.0f); 
+                // 设置垂直偏移量，向上移动以避免手指遮挡
+                // 默认偏移量通常在手指上方，但用户希望能再往上一点
+                // 设定一个较大的负值，例如 -100dp
+                builder.setDefaultSourceToMagnifierOffset(0, -dpToPx(context, 100));
+                mMagnifier = builder.build();
+            } else if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
                 mMagnifier = new Magnifier(this);
             }
             
