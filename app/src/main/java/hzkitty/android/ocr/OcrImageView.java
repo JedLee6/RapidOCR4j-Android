@@ -1485,13 +1485,25 @@ public class OcrImageView extends FrameLayout {
                 if (i >= mCharList.size()) break;
 
                 OcrChar curr = mCharList.get(i);
+                
+                // 1. 处理当前字符如果是换行符的情况（同Block内的换行，或OCR识别出的换行）
+                if (curr.charText.equals("\n") || curr.charText.equals("\r") || curr.charText.equals("\r\n")) {
+                    // 如果换行符后还有内容，尝试智能连接
+                    if (i < end && i + 1 < mCharList.size()) {
+                        OcrChar next = mCharList.get(i + 1);
+                        smartJoin(sb, next);
+                    }
+                    // 跳过换行符本身，不添加到sb
+                    continue;
+                }
+                
                 sb.append(curr.charText);
                 
-                // 处理行尾连接
+                // 2. 处理跨越文本块（Block）的连接
                 if (i < end && i + 1 < mCharList.size()) {
                     OcrChar next = mCharList.get(i + 1);
                     
-                    // 如果跨越了文本块（通常意味着换行）
+                    // 如果跨越了文本块
                     if (curr.blockIndex != next.blockIndex) {
                         // 计算行高和垂直间距
                         float currHeight = curr.rect.height();
@@ -1506,36 +1518,7 @@ public class OcrImageView extends FrameLayout {
                         boolean isSoftWrap = verticalGap < avgHeight * 1.5; 
                         
                         if (isSoftWrap) {
-                            // 智能合并策略
-                            boolean currIsCJK = isCJK(curr.charText);
-                            boolean nextIsCJK = isCJK(next.charText);
-                            
-                            if (curr.charText.equals("-")) {
-                                // 连字符处理
-                                boolean precedeBySpace = false;
-                                if (sb.length() > 1) {
-                                    char prevChar = sb.charAt(sb.length() - 2);
-                                    if (Character.isWhitespace(prevChar)) {
-                                        precedeBySpace = true;
-                                    }
-                                }
-                                
-                                if (!precedeBySpace) {
-                                    // 认为是单词截断，移除连字符
-                                    sb.deleteCharAt(sb.length() - 1);
-                                    // 不加空格
-                                } else {
-                                    // 独立连字符，保留并加空格
-                                    sb.append(" ");
-                                }
-                            } else if (currIsCJK && nextIsCJK) {
-                                // 中文/CJK之间不加空格
-                            } else {
-                                // 其他情况（英文/数字等）加空格
-                                if (sb.length() > 0 && sb.charAt(sb.length() - 1) != ' ') {
-                                    sb.append(" ");
-                                }
-                            }
+                            smartJoin(sb, next);
                         } else {
                             // 硬换行，保留换行符
                             sb.append("\n");
@@ -1545,6 +1528,53 @@ public class OcrImageView extends FrameLayout {
             }
             
             return sb.toString();
+        }
+
+        /**
+         * 智能连接逻辑：处理连字符、CJK字符和空格
+         */
+        private void smartJoin(StringBuilder sb, OcrChar next) {
+            if (sb.length() == 0) return;
+            
+            char prevChar = sb.charAt(sb.length() - 1);
+            String nextStr = next.charText;
+            if (nextStr == null || nextStr.isEmpty()) return;
+            
+            // 1. 处理连字符 (Hyphenation)
+            if (prevChar == '-') {
+                boolean precedeBySpace = false;
+                if (sb.length() > 1) {
+                    char prevPrev = sb.charAt(sb.length() - 2);
+                    if (Character.isWhitespace(prevPrev)) {
+                        precedeBySpace = true;
+                    }
+                }
+                
+                if (!precedeBySpace) {
+                    // 认为是单词截断，移除连字符
+                    sb.deleteCharAt(sb.length() - 1);
+                    // 移除后直接连接，不加空格
+                    return; 
+                } else {
+                    // 独立连字符，保留并加空格
+                    sb.append(" ");
+                    return;
+                }
+            }
+            
+            // 2. 处理CJK字符（中文/日文/韩文）
+            boolean prevIsCJK = isCJK(String.valueOf(prevChar));
+            boolean nextIsCJK = isCJK(nextStr);
+            
+            if (prevIsCJK && nextIsCJK) {
+                // 中文/CJK之间不加空格
+                return;
+            }
+            
+            // 3. 其他情况（英文/数字等）加空格
+            if (prevChar != ' ') {
+                sb.append(" ");
+            }
         }
         
         private boolean isCJK(String s) {
