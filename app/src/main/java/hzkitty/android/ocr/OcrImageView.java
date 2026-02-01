@@ -1282,11 +1282,12 @@ public class OcrImageView extends FrameLayout {
                 case MotionEvent.ACTION_MOVE:
                     // 2. 处理拖拽逻辑
                     if (mStartIndex != -1 && mEndIndex != -1) {
-                        int targetIndex = getClosestCharIndex(x, y);
+                        float radius = mHandleSize / 2f;
                         
-                        if (targetIndex != -1) {
-                            // 如果是拖拽状态，更新对应索引
-                            if (mDraggingHandle == HandleType.START) {
+                        if (mDraggingHandle == HandleType.START) {
+                            // 优化坐标：使用手柄右上角作为判断点 (x + radius, y - radius)
+                            int targetIndex = getClosestCharIndex(x + radius, y - radius);
+                            if (targetIndex != -1) {
                                 mStartIndex = targetIndex;
                                 // 显示放大镜
                                 if (mMagnifier != null) mMagnifier.show(x, y);
@@ -1294,7 +1295,11 @@ public class OcrImageView extends FrameLayout {
                                 getParent().requestDisallowInterceptTouchEvent(true);
                                 invalidate();
                                 return true;
-                            } else if (mDraggingHandle == HandleType.END) {
+                            }
+                        } else if (mDraggingHandle == HandleType.END) {
+                            // 优化坐标：使用手柄左上角作为判断点 (x - radius, y - radius)
+                            int targetIndex = getClosestCharIndex(x - radius, y - radius);
+                            if (targetIndex != -1) {
                                 mEndIndex = targetIndex;
                                 // 显示放大镜
                                 if (mMagnifier != null) mMagnifier.show(x, y);
@@ -1302,27 +1307,33 @@ public class OcrImageView extends FrameLayout {
                                 getParent().requestDisallowInterceptTouchEvent(true);
                                 invalidate();
                                 return true;
-                            } else {
-                                // 如果不是拖拽状态，但有选择，判断是否要开始拖拽
-                                if (isTouchingStartHandle(x, y)) {
-                                    mDraggingHandle = HandleType.START;
-                                    mStartIndex = targetIndex;
-                                    // 显示放大镜
-                                    if (mMagnifier != null) mMagnifier.show(x, y);
-                                    // 禁止父视图拦截触摸事件
-                                    getParent().requestDisallowInterceptTouchEvent(true);
-                                    invalidate();
-                                    return true;
-                                } else if (isTouchingEndHandle(x, y)) {
-                                    mDraggingHandle = HandleType.END;
-                                    mEndIndex = targetIndex;
-                                    // 显示放大镜
-                                    if (mMagnifier != null) mMagnifier.show(x, y);
-                                    // 禁止父视图拦截触摸事件
-                                    getParent().requestDisallowInterceptTouchEvent(true);
-                                    invalidate();
-                                    return true;
-                                }
+                            }
+                        } else {
+                            // 如果不是拖拽状态，但有选择，判断是否要开始拖拽
+                            if (isTouchingStartHandle(x, y)) {
+                                mDraggingHandle = HandleType.START;
+                                // 优化坐标
+                                int targetIndex = getClosestCharIndex(x + radius, y - radius);
+                                if (targetIndex != -1) mStartIndex = targetIndex;
+                                
+                                // 显示放大镜
+                                if (mMagnifier != null) mMagnifier.show(x, y);
+                                // 禁止父视图拦截触摸事件
+                                getParent().requestDisallowInterceptTouchEvent(true);
+                                invalidate();
+                                return true;
+                            } else if (isTouchingEndHandle(x, y)) {
+                                mDraggingHandle = HandleType.END;
+                                // 优化坐标
+                                int targetIndex = getClosestCharIndex(x - radius, y - radius);
+                                if (targetIndex != -1) mEndIndex = targetIndex;
+                                
+                                // 显示放大镜
+                                if (mMagnifier != null) mMagnifier.show(x, y);
+                                // 禁止父视图拦截触摸事件
+                                getParent().requestDisallowInterceptTouchEvent(true);
+                                invalidate();
+                                return true;
                             }
                         }
                     }
