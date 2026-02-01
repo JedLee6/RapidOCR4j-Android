@@ -479,66 +479,71 @@ public class OcrImageView extends FrameLayout {
      * @return int[] {backgroundColor, textColor}
      */
     private int[] extractColors(Bitmap bitmap, Rect rect) {
-        if (bitmap == null || rect == null) {
+        if (bitmap == null || rect == null || bitmap.isRecycled()) {
             return new int[]{Color.BLACK, Color.WHITE};
         }
 
-        // Ensure rect is within bitmap bounds
-        int left = Math.max(0, rect.left);
-        int top = Math.max(0, rect.top);
-        int right = Math.min(bitmap.getWidth(), rect.right);
-        int bottom = Math.min(bitmap.getHeight(), rect.bottom);
+        try {
+            // Ensure rect is within bitmap bounds
+            int left = Math.max(0, rect.left);
+            int top = Math.max(0, rect.top);
+            int right = Math.min(bitmap.getWidth(), rect.right);
+            int bottom = Math.min(bitmap.getHeight(), rect.bottom);
 
-        if (left >= right || top >= bottom) {
-            return new int[]{Color.BLACK, Color.WHITE};
-        }
+            if (left >= right || top >= bottom) {
+                return new int[]{Color.BLACK, Color.WHITE};
+            }
 
-        // 1. Estimate Background Color (sample corners and edges)
-        // Sampling more points for better stability
-        int[] bgSamples = new int[] {
-            bitmap.getPixel(left, top),
-            bitmap.getPixel(right - 1, top),
-            bitmap.getPixel(left, bottom - 1),
-            bitmap.getPixel(right - 1, bottom - 1),
-            bitmap.getPixel(left + (right - left) / 2, top), // top-mid
-            bitmap.getPixel(left + (right - left) / 2, bottom - 1) // bottom-mid
-        };
+            // 1. Estimate Background Color (sample corners and edges)
+            // Sampling more points for better stability
+            int[] bgSamples = new int[] {
+                bitmap.getPixel(left, top),
+                bitmap.getPixel(right - 1, top),
+                bitmap.getPixel(left, bottom - 1),
+                bitmap.getPixel(right - 1, bottom - 1),
+                bitmap.getPixel(left + (right - left) / 2, top), // top-mid
+                bitmap.getPixel(left + (right - left) / 2, bottom - 1) // bottom-mid
+            };
 
-        // Simple average of samples for background
-        long r = 0, g = 0, b = 0;
-        for (int color : bgSamples) {
-            r += Color.red(color);
-            g += Color.green(color);
-            b += Color.blue(color);
-        }
-        int bgColor = Color.rgb((int)(r / bgSamples.length), (int)(g / bgSamples.length), (int)(b / bgSamples.length));
+            // Simple average of samples for background
+            long r = 0, g = 0, b = 0;
+            for (int color : bgSamples) {
+                r += Color.red(color);
+                g += Color.green(color);
+                b += Color.blue(color);
+            }
+            int bgColor = Color.rgb((int)(r / bgSamples.length), (int)(g / bgSamples.length), (int)(b / bgSamples.length));
 
-        // 2. Estimate Text Color
-        // Scan a few lines to find the color with maximum contrast to bgColor
-        int bestTextColor = Color.WHITE; // Fallback
-        double maxContrast = -1;
+            // 2. Estimate Text Color
+            // Scan a few lines to find the color with maximum contrast to bgColor
+            int bestTextColor = Color.WHITE; // Fallback
+            double maxContrast = -1;
 
-        // Sample stride to improve performance
-        int stepX = Math.max(1, (right - left) / 20); // Check 20 points horizontally
-        int stepY = Math.max(1, (bottom - top) / 5);  // Check 5 lines vertically
+            // Sample stride to improve performance
+            int stepX = Math.max(1, (right - left) / 20); // Check 20 points horizontally
+            int stepY = Math.max(1, (bottom - top) / 5);  // Check 5 lines vertically
 
-        for (int y = top + stepY; y < bottom; y += stepY) {
-            for (int x = left; x < right; x += stepX) {
-                int pixel = bitmap.getPixel(x, y);
-                double contrast = calculateColorDifference(pixel, bgColor);
-                if (contrast > maxContrast) {
-                    maxContrast = contrast;
-                    bestTextColor = pixel;
+            for (int y = top + stepY; y < bottom; y += stepY) {
+                for (int x = left; x < right; x += stepX) {
+                    int pixel = bitmap.getPixel(x, y);
+                    double contrast = calculateColorDifference(pixel, bgColor);
+                    if (contrast > maxContrast) {
+                        maxContrast = contrast;
+                        bestTextColor = pixel;
+                    }
                 }
             }
-        }
-        
-        // If contrast is too low, fallback to black or white based on bg brightness
-        if (maxContrast < 30) { 
-             bestTextColor = isDark(bgColor) ? Color.WHITE : Color.BLACK;
-        }
+            
+            // If contrast is too low, fallback to black or white based on bg brightness
+            if (maxContrast < 30) { 
+                 bestTextColor = isDark(bgColor) ? Color.WHITE : Color.BLACK;
+            }
 
-        return new int[]{bgColor, bestTextColor};
+            return new int[]{bgColor, bestTextColor};
+        } catch (Exception e) {
+            e.printStackTrace();
+            return new int[]{Color.BLACK, Color.WHITE};
+        }
     }
 
     private double calculateColorDifference(int c1, int c2) {
@@ -606,6 +611,11 @@ public class OcrImageView extends FrameLayout {
             
             // 初始化手势检测器
             mGestureDetector = new GestureDetector(context, new GestureDetector.SimpleOnGestureListener() {
+                @Override
+                public boolean onDown(MotionEvent e) {
+                    return true; // 必须返回true，表明接收该事件序列，否则onLongPress可能无法触发
+                }
+
                 @Override
                 public void onLongPress(MotionEvent e) {
                     // 长按开始选择
