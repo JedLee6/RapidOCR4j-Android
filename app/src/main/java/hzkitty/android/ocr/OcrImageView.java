@@ -164,14 +164,26 @@ public class OcrImageView extends FrameLayout {
             for (RecResult result : results) {
                 Point[] box = result.getDtBoxes();
                 if (box != null && box.length >= 4) {
-                    // 计算文本框的最小外接矩形
+                    // 计算文本框的最小外接矩形 (视图坐标系)
                     int left = Integer.MAX_VALUE;
                     int top = Integer.MAX_VALUE;
                     int right = Integer.MIN_VALUE;
                     int bottom = Integer.MIN_VALUE;
                     
+                    // 计算原始图片上的坐标用于提取颜色
+                    int origLeft = Integer.MAX_VALUE;
+                    int origTop = Integer.MAX_VALUE;
+                    int origRight = Integer.MIN_VALUE;
+                    int origBottom = Integer.MIN_VALUE;
+                    
                     for (Point point : box) {
-                        // 应用缩放比例并加上偏移量
+                        // 记录原始坐标
+                        origLeft = Math.min(origLeft, (int) point.x);
+                        origTop = Math.min(origTop, (int) point.y);
+                        origRight = Math.max(origRight, (int) point.x);
+                        origBottom = Math.max(origBottom, (int) point.y);
+                        
+                        // 应用缩放比例并加上偏移量，转换为视图坐标
                         float scaledX = (float) point.x * scale + offsetX;
                         float scaledY = (float) point.y * scale + offsetY;
                         
@@ -181,8 +193,13 @@ public class OcrImageView extends FrameLayout {
                         bottom = Math.max(bottom, (int) scaledY);
                     }
                     
+                    // 提取颜色 (使用原始图片坐标)
+                    int[] colors = extractColors(mBitmap, new Rect(origLeft, origTop, origRight, origBottom));
+                    int bgColor = colors[0];
+                    int textColor = colors[1];
+                    
                     // 创建TextView显示识别的文本
-                    TextView textView = createTextView(result.getText(), new Rect(left, top, right, bottom));
+                    TextView textView = createTextView(result.getText(), new Rect(left, top, right, bottom), textColor, bgColor);
                     mTextViews.add(textView);
                     mTextContainer.addView(textView);
                     
@@ -273,16 +290,20 @@ public class OcrImageView extends FrameLayout {
     /**
      * 创建用于显示识别文本的TextView
      */
-    private TextView createTextView(String text, Rect rect) {
+    private TextView createTextView(String text, Rect rect, int textColor, int bgColor) {
         // 使用AppCompatTextView以确保在所有版本上都支持自动调整字体大小
         androidx.appcompat.widget.AppCompatTextView textView = new androidx.appcompat.widget.AppCompatTextView(getContext());
+        
+        // 保存提取的颜色到Tag
+        textView.setTag(new int[]{bgColor, textColor});
         
         // 设置文本内容
         textView.setText(text);
         
         // 设置文本样式
-        textView.setTextColor(Color.WHITE);
-        textView.setShadowLayer(2f, 1f, 1f, Color.BLACK);
+        textView.setTextColor(textColor);
+        // 阴影设置移至updateTextViewAppearance中处理
+        
         // 移除默认padding，设置为0
         textView.setPadding(0, 0, 0, 0);
         // 移除字体上下留白
@@ -290,7 +311,7 @@ public class OcrImageView extends FrameLayout {
         // 设置行间距为0
         textView.setLineSpacing(0, 1f);
         
-        // 设置背景透明度
+        // 设置背景透明度及其他外观
         updateTextViewAppearance(textView);
         
         // 设置文本选择功能
@@ -390,13 +411,28 @@ public class OcrImageView extends FrameLayout {
         // 设置可见性
         textView.setVisibility(mTextVisible ? View.VISIBLE : View.GONE);
         
+        // 获取原始背景颜色 (如果有)
+        int bgColor = Color.BLACK; // 默认黑色
+        Object tag = textView.getTag();
+        if (tag instanceof int[]) {
+            int[] colors = (int[]) tag;
+            if (colors.length >= 2) {
+                bgColor = colors[0];
+            }
+        }
+        
         // 设置背景透明度
         int alpha = (int) (mTextOpacity * 255);
-        textView.setBackgroundColor(Color.argb(alpha, 0, 0, 0));
+        textView.setBackgroundColor(Color.argb(alpha, Color.red(bgColor), Color.green(bgColor), Color.blue(bgColor)));
         
         // 更新阴影效果的可见性
         if (mTextVisible) {
-            textView.setShadowLayer(2f, 1f, 1f, Color.BLACK);
+            // 如果使用了提取的颜色，稍微减弱阴影，避免太突兀
+            if (bgColor != Color.BLACK) {
+                textView.setShadowLayer(1f, 0.5f, 0.5f, isDark(bgColor) ? Color.BLACK : Color.GRAY);
+            } else {
+                textView.setShadowLayer(2f, 1f, 1f, Color.BLACK);
+            }
         } else {
             textView.setShadowLayer(0f, 0f, 0f, Color.TRANSPARENT);
         }
@@ -427,8 +463,7 @@ public class OcrImageView extends FrameLayout {
         // 确保透明度在0.0到1.0之间
         mTextOpacity = Math.max(0.0f, Math.min(1.0f, opacity));
         for (TextView textView : mTextViews) {
-            int alpha = (int) (mTextOpacity * 255);
-            textView.setBackgroundColor(Color.argb(alpha, 0, 0, 0));
+            updateTextViewAppearance(textView);
         }
     }
     
@@ -439,6 +474,84 @@ public class OcrImageView extends FrameLayout {
         return mTextOpacity;
     }
     
+    /**
+     * Extracts background and text colors from the bitmap within the specified rectangle.
+     * @return int[] {backgroundColor, textColor}
+     */
+    private int[] extractColors(Bitmap bitmap, Rect rect) {
+        if (bitmap == null || rect == null) {
+            return new int[]{Color.BLACK, Color.WHITE};
+        }
+
+        // Ensure rect is within bitmap bounds
+        int left = Math.max(0, rect.left);
+        int top = Math.max(0, rect.top);
+        int right = Math.min(bitmap.getWidth(), rect.right);
+        int bottom = Math.min(bitmap.getHeight(), rect.bottom);
+
+        if (left >= right || top >= bottom) {
+            return new int[]{Color.BLACK, Color.WHITE};
+        }
+
+        // 1. Estimate Background Color (sample corners and edges)
+        // Sampling more points for better stability
+        int[] bgSamples = new int[] {
+            bitmap.getPixel(left, top),
+            bitmap.getPixel(right - 1, top),
+            bitmap.getPixel(left, bottom - 1),
+            bitmap.getPixel(right - 1, bottom - 1),
+            bitmap.getPixel(left + (right - left) / 2, top), // top-mid
+            bitmap.getPixel(left + (right - left) / 2, bottom - 1) // bottom-mid
+        };
+
+        // Simple average of samples for background
+        long r = 0, g = 0, b = 0;
+        for (int color : bgSamples) {
+            r += Color.red(color);
+            g += Color.green(color);
+            b += Color.blue(color);
+        }
+        int bgColor = Color.rgb((int)(r / bgSamples.length), (int)(g / bgSamples.length), (int)(b / bgSamples.length));
+
+        // 2. Estimate Text Color
+        // Scan a few lines to find the color with maximum contrast to bgColor
+        int bestTextColor = Color.WHITE; // Fallback
+        double maxContrast = -1;
+
+        // Sample stride to improve performance
+        int stepX = Math.max(1, (right - left) / 20); // Check 20 points horizontally
+        int stepY = Math.max(1, (bottom - top) / 5);  // Check 5 lines vertically
+
+        for (int y = top + stepY; y < bottom; y += stepY) {
+            for (int x = left; x < right; x += stepX) {
+                int pixel = bitmap.getPixel(x, y);
+                double contrast = calculateColorDifference(pixel, bgColor);
+                if (contrast > maxContrast) {
+                    maxContrast = contrast;
+                    bestTextColor = pixel;
+                }
+            }
+        }
+        
+        // If contrast is too low, fallback to black or white based on bg brightness
+        if (maxContrast < 30) { 
+             bestTextColor = isDark(bgColor) ? Color.WHITE : Color.BLACK;
+        }
+
+        return new int[]{bgColor, bestTextColor};
+    }
+
+    private double calculateColorDifference(int c1, int c2) {
+        int r = Color.red(c1) - Color.red(c2);
+        int g = Color.green(c1) - Color.green(c2);
+        int b = Color.blue(c1) - Color.blue(c2);
+        return Math.sqrt(r * r + g * g + b * b);
+    }
+    
+    private boolean isDark(int color) {
+        return (0.299 * Color.red(color) + 0.587 * Color.green(color) + 0.114 * Color.blue(color)) < 128;
+    }
+
     /**
      * 自定义文本选择视图，实现类似Google Lens的文本选择功能
      */
