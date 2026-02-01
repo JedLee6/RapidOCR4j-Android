@@ -36,6 +36,7 @@ import android.view.Gravity;
 import android.view.ViewGroup;
 import android.widget.LinearLayout;
 import android.widget.PopupWindow;
+import android.widget.Magnifier;
 import android.graphics.drawable.GradientDrawable;
 import android.util.TypedValue;
 import androidx.core.widget.TextViewCompat;
@@ -637,9 +638,17 @@ public class OcrImageView extends FrameLayout {
 
         // 手势检测
         private GestureDetector mGestureDetector;
+        
+        // 放大镜
+        private Magnifier mMagnifier;
 
         public LensSelectView(Context context) {
             super(context);
+            
+            // 初始化放大镜 (API 28+)
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                mMagnifier = new Magnifier(this);
+            }
             
             // 初始化画笔
             mHighlightPaint = new Paint();
@@ -884,12 +893,16 @@ public class OcrImageView extends FrameLayout {
                     if (isTouchingStartHandle(x, y)) {
                         mDraggingHandle = HandleType.START;
                         if (mActionPopup != null) mActionPopup.dismiss();
+                        // 显示放大镜
+                        if (mMagnifier != null) mMagnifier.show(x, y);
                         // 禁止父视图拦截触摸事件
                         getParent().requestDisallowInterceptTouchEvent(true);
                         return true;
                     } else if (isTouchingEndHandle(x, y)) {
                         mDraggingHandle = HandleType.END;
                         if (mActionPopup != null) mActionPopup.dismiss();
+                        // 显示放大镜
+                        if (mMagnifier != null) mMagnifier.show(x, y);
                         // 禁止父视图拦截触摸事件
                         getParent().requestDisallowInterceptTouchEvent(true);
                         return true;
@@ -905,12 +918,16 @@ public class OcrImageView extends FrameLayout {
                             // 如果是拖拽状态，更新对应索引
                             if (mDraggingHandle == HandleType.START) {
                                 mStartIndex = targetIndex;
+                                // 显示放大镜
+                                if (mMagnifier != null) mMagnifier.show(x, y);
                                 // 禁止父视图拦截触摸事件
                                 getParent().requestDisallowInterceptTouchEvent(true);
                                 invalidate();
                                 return true;
                             } else if (mDraggingHandle == HandleType.END) {
                                 mEndIndex = targetIndex;
+                                // 显示放大镜
+                                if (mMagnifier != null) mMagnifier.show(x, y);
                                 // 禁止父视图拦截触摸事件
                                 getParent().requestDisallowInterceptTouchEvent(true);
                                 invalidate();
@@ -920,6 +937,8 @@ public class OcrImageView extends FrameLayout {
                                 if (isTouchingStartHandle(x, y)) {
                                     mDraggingHandle = HandleType.START;
                                     mStartIndex = targetIndex;
+                                    // 显示放大镜
+                                    if (mMagnifier != null) mMagnifier.show(x, y);
                                     // 禁止父视图拦截触摸事件
                                     getParent().requestDisallowInterceptTouchEvent(true);
                                     invalidate();
@@ -927,6 +946,8 @@ public class OcrImageView extends FrameLayout {
                                 } else if (isTouchingEndHandle(x, y)) {
                                     mDraggingHandle = HandleType.END;
                                     mEndIndex = targetIndex;
+                                    // 显示放大镜
+                                    if (mMagnifier != null) mMagnifier.show(x, y);
                                     // 禁止父视图拦截触摸事件
                                     getParent().requestDisallowInterceptTouchEvent(true);
                                     invalidate();
@@ -938,6 +959,10 @@ public class OcrImageView extends FrameLayout {
                     break;
                     
                 case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+                    // 隐藏放大镜
+                    if (mMagnifier != null) mMagnifier.dismiss();
+                    
                         // 3. 停止拖拽
                     if (mDraggingHandle != HandleType.NONE) {
                         mDraggingHandle = HandleType.NONE;
