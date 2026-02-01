@@ -496,6 +496,30 @@ public class OcrImageView extends FrameLayout {
                         showActionMenu();
                     }
                 }
+
+                @Override
+                public boolean onSingleTapUp(MotionEvent e) {
+                    // 单击事件，用于取消选择
+                    if (mStartIndex != -1 && mEndIndex != -1) {
+                        float x = e.getX();
+                        float y = e.getY();
+                        
+                        // 检查是否点击了手柄
+                        if (isTouchingStartHandle(x, y) || isTouchingEndHandle(x, y)) {
+                            return false;
+                        }
+                        
+                        // 检查是否点击了已选择的区域
+                        if (isPointInSelection(x, y)) {
+                            return false;
+                        }
+                        
+                        // 点击了非选择区域，重置选择
+                        clearSelection();
+                        return true;
+                    }
+                    return false;
+                }
             });
             
             // 设置可触摸
@@ -638,13 +662,6 @@ public class OcrImageView extends FrameLayout {
                                     getParent().requestDisallowInterceptTouchEvent(true);
                                     invalidate();
                                     return true;
-                                } else {
-                                    // 更新结束索引，实现自由滑动选择
-                                    mEndIndex = targetIndex;
-                                    // 禁止父视图拦截触摸事件
-                                    getParent().requestDisallowInterceptTouchEvent(true);
-                                    invalidate();
-                                    return true;
                                 }
                             }
                         }
@@ -698,6 +715,26 @@ public class OcrImageView extends FrameLayout {
             float dx = pointX - circleX;
             float dy = pointY - circleY;
             return dx * dx + dy * dy <= radius * radius;
+        }
+
+        /**
+         * 判断点是否在当前选择区域内
+         */
+        private boolean isPointInSelection(float x, float y) {
+            if (mStartIndex == -1 || mEndIndex == -1 || mCharList.isEmpty()) {
+                return false;
+            }
+            
+            int start = Math.min(mStartIndex, mEndIndex);
+            int end = Math.max(mStartIndex, mEndIndex);
+            
+            for (int i = start; i <= end && i < mCharList.size(); i++) {
+                OcrChar ocrChar = mCharList.get(i);
+                if (ocrChar.rect.contains(x, y)) {
+                    return true;
+                }
+            }
+            return false;
         }
         
         /**
