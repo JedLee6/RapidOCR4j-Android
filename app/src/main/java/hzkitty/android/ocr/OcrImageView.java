@@ -523,8 +523,8 @@ public class OcrImageView extends FrameLayout {
                     float verticalGap = next.rect.top - curr.rect.bottom;
                     
                     // 判断是否为同一段落的软换行
-                    // 条件：间距不过大 (Gap < avgHeight * 1.5)
-                    boolean isSoftWrap = verticalGap < avgHeight * 1.5; 
+                    // 条件：间距不过大 (Gap < avgHeight * 0.5)
+                    boolean isSoftWrap = verticalGap < avgHeight * 0.5;
                     
                     if (isSoftWrap) {
                         smartJoin(sb, next);
