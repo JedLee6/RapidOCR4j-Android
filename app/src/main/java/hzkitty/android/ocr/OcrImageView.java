@@ -871,9 +871,26 @@ public class OcrImageView extends FrameLayout {
 
                 @Override
                 public void onLongPress(MotionEvent e) {
-                    // 长按开始选择
                     float x = e.getX();
                     float y = e.getY();
+
+                    // 如果长按的是手柄，进入拖拽模式，不重置选择
+                    if (isTouchingStartHandle(x, y)) {
+                        mDraggingHandle = HandleType.START;
+                        performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS);
+                        if (mMagnifier != null) mMagnifier.show(x, y);
+                        getParent().requestDisallowInterceptTouchEvent(true);
+                        return;
+                    }
+                    if (isTouchingEndHandle(x, y)) {
+                        mDraggingHandle = HandleType.END;
+                        performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS);
+                        if (mMagnifier != null) mMagnifier.show(x, y);
+                        getParent().requestDisallowInterceptTouchEvent(true);
+                        return;
+                    }
+
+                    // 长按开始新的选择
                     int closestIndex = getClosestCharIndex(x, y);
                     if (closestIndex != -1) {
                         // 智能扩展选择：向左右扩展直到遇到空白符
