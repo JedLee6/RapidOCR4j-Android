@@ -647,7 +647,8 @@ public class OcrImageView extends FrameLayout {
             mHighlightPaint.setStyle(Paint.Style.FILL);
             
             mHandlePaint = new Paint();
-            mHandlePaint.setColor(Color.WHITE);
+            // 深蓝色，80%不透明度 (#CC = 204/255 ≈ 80%)
+            mHandlePaint.setColor(Color.parseColor("#CC00008B"));
             mHandlePaint.setStyle(Paint.Style.FILL);
             mHandlePaint.setAntiAlias(true);
             
@@ -655,8 +656,8 @@ public class OcrImageView extends FrameLayout {
             mStartHandleDrawable = null;
             mEndHandleDrawable = null;
             
-            // 手柄大小
-            mHandleSize = dpToPx(context, 20);
+            // 手柄大小 (原20dp -> 40dp)
+            mHandleSize = dpToPx(context, 40);
             
             // 初始化手势检测器
             mGestureDetector = new GestureDetector(context, new GestureDetector.SimpleOnGestureListener() {
