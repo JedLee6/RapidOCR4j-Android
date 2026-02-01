@@ -17,8 +17,6 @@
     <string name="text_percentage_0">0%</string>
     <string name="text_percentage_100">100%</string>
 
-    <!-- Text merging -->
-    <string name="text_smart_merge">Smart Merge Text:</string>
 
     <!-- Recognition results -->
     <string name="text_recognition_box_details">Recognition Box Details</string>

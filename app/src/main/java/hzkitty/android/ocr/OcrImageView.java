@@ -89,19 +89,29 @@ public class OcrImageView extends FrameLayout {
             this.blockIndex = blockIndex;
         }
     }
-    
-    public OcrImageView(Context context) {
-        super(context);
-        init();
+
+    public interface OnTextProcessedListener {
+        void onTextProcessed(String text);
     }
-    
-    public OcrImageView(Context context, AttributeSet attrs) {
-        super(context, attrs);
-        init();
+
+    private OnTextProcessedListener mTextProcessedListener;
+
+    public void setOnTextProcessedListener(OnTextProcessedListener listener) {
+        this.mTextProcessedListener = listener;
     }
     
     public OcrImageView(Context context, AttributeSet attrs, int defStyle) {
         super(context, attrs, defStyle);
+        init();
+    }
+
+    public OcrImageView(Context context, AttributeSet attrs) {
+        super(context, attrs);
+        init();
+    }
+
+    public OcrImageView(Context context) {
+        super(context);
         init();
     }
     
@@ -463,6 +473,130 @@ public class OcrImageView extends FrameLayout {
         
         // 更新LensSelectView的数据
         mLensSelectView.setCharList(mCharList);
+
+        // 通知外部文本处理完成
+        if (mTextProcessedListener != null) {
+            String fullText = getAllSmartText();
+            mTextProcessedListener.onTextProcessed(fullText);
+        }
+    }
+
+    /**
+     * 获取所有智能合并后的文本
+     */
+    public String getAllSmartText() {
+        return getSmartText(mCharList);
+    }
+
+    /**
+     * 核心智能合并逻辑
+     */
+    private String getSmartText(List<OcrChar> chars) {
+        if (chars == null || chars.isEmpty()) return "";
+        StringBuilder sb = new StringBuilder();
+        
+        for (int i = 0; i < chars.size(); i++) {
+            OcrChar curr = chars.get(i);
+            
+            // 1. 处理当前字符如果是换行符的情况
+            if (curr.charText.equals("\n") || curr.charText.equals("\r") || curr.charText.equals("\r\n")) {
+                if (i + 1 < chars.size()) {
+                    smartJoin(sb, chars.get(i + 1));
+                }
+                continue;
+            }
+            
+            sb.append(curr.charText);
+            
+            // 2. 处理跨越文本块（Block）的连接
+            if (i + 1 < chars.size()) {
+                OcrChar next = chars.get(i + 1);
+                
+                // 如果跨越了文本块
+                if (curr.blockIndex != next.blockIndex) {
+                    // 计算行高和垂直间距
+                    float currHeight = curr.rect.height();
+                    float nextHeight = next.rect.height();
+                    float avgHeight = (currHeight + nextHeight) / 2;
+                    
+                    // 垂直间距：下一行顶部 - 当前行底部
+                    float verticalGap = next.rect.top - curr.rect.bottom;
+                    
+                    // 判断是否为同一段落的软换行
+                    // 条件：间距不过大 (Gap < avgHeight * 1.5)
+                    boolean isSoftWrap = verticalGap < avgHeight * 1.5; 
+                    
+                    if (isSoftWrap) {
+                        smartJoin(sb, next);
+                    } else {
+                        // 硬换行，保留换行符
+                        sb.append("\n");
+                    }
+                }
+            }
+        }
+        return sb.toString();
+    }
+
+    /**
+     * 智能连接逻辑：处理连字符、CJK字符和空格
+     */
+    private void smartJoin(StringBuilder sb, OcrChar next) {
+        if (sb.length() == 0) return;
+        
+        char prevChar = sb.charAt(sb.length() - 1);
+        String nextStr = next.charText;
+        if (nextStr == null || nextStr.isEmpty()) return;
+        
+        // 1. 处理连字符 (Hyphenation)
+        if (prevChar == '-') {
+            boolean precedeBySpace = false;
+            if (sb.length() > 1) {
+                char prevPrev = sb.charAt(sb.length() - 2);
+                if (Character.isWhitespace(prevPrev)) {
+                    precedeBySpace = true;
+                }
+            }
+            
+            if (!precedeBySpace) {
+                // 认为是单词截断，移除连字符
+                sb.deleteCharAt(sb.length() - 1);
+                // 移除后直接连接，不加空格
+                return; 
+            } else {
+                // 独立连字符，保留并加空格
+                sb.append(" ");
+                return;
+            }
+        }
+        
+        // 2. 处理CJK字符（中文/日文/韩文）
+        boolean prevIsCJK = isCJK(String.valueOf(prevChar));
+        boolean nextIsCJK = isCJK(nextStr);
+        
+        if (prevIsCJK && nextIsCJK) {
+            // 中文/CJK之间不加空格
+            return;
+        }
+        
+        // 3. 其他情况（英文/数字等）加空格
+        if (prevChar != ' ') {
+            sb.append(" ");
+        }
+    }
+    
+    private boolean isCJK(String s) {
+        if (s == null || s.isEmpty()) return false;
+        int cp = s.codePointAt(0);
+        Character.UnicodeBlock block = Character.UnicodeBlock.of(cp);
+        return Character.UnicodeBlock.CJK_UNIFIED_IDEOGRAPHS.equals(block)
+                || Character.UnicodeBlock.CJK_COMPATIBILITY_IDEOGRAPHS.equals(block)
+                || Character.UnicodeBlock.CJK_UNIFIED_IDEOGRAPHS_EXTENSION_A.equals(block)
+                || Character.UnicodeBlock.CJK_UNIFIED_IDEOGRAPHS_EXTENSION_B.equals(block)
+                || Character.UnicodeBlock.CJK_SYMBOLS_AND_PUNCTUATION.equals(block)
+                || Character.UnicodeBlock.HALFWIDTH_AND_FULLWIDTH_FORMS.equals(block)
+                || Character.UnicodeBlock.HIRAGANA.equals(block)
+                || Character.UnicodeBlock.KATAKANA.equals(block);
     }
 
     /**
@@ -1426,24 +1560,16 @@ public class OcrImageView extends FrameLayout {
                 mActionPopup.showAtLocation(this, Gravity.NO_GRAVITY, x, y);
             }
         }
-
+        
         private TextView createMenuButton(String text) {
             TextView btn = new TextView(getContext());
             btn.setText(text);
             btn.setTextColor(Color.BLACK);
             btn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
-            btn.setGravity(Gravity.CENTER);
-            btn.setPadding(dpToPx(getContext(), 4), dpToPx(getContext(), 8), dpToPx(getContext(), 4), dpToPx(getContext(), 8));
-            // 添加点击波纹效果
-            TypedValue outValue = new TypedValue();
-            getContext().getTheme().resolveAttribute(android.R.attr.selectableItemBackground, outValue, true);
-            btn.setBackgroundResource(outValue.resourceId);
+            btn.setPadding(dpToPx(getContext(), 12), dpToPx(getContext(), 8), dpToPx(getContext(), 12), dpToPx(getContext(), 8));
             return btn;
         }
 
-        /**
-         * 获取当前选择区域的整体矩形
-         */
         private RectF getSelectionRect() {
             if (mStartIndex == -1 || mEndIndex == -1 || mCharList.isEmpty()) {
                 return null;
@@ -1457,20 +1583,15 @@ public class OcrImageView extends FrameLayout {
             float bottom = Float.MIN_VALUE;
             
             for (int i = start; i <= end && i < mCharList.size(); i++) {
-                OcrChar c = mCharList.get(i);
-                left = Math.min(left, c.rect.left);
-                top = Math.min(top, c.rect.top);
-                right = Math.max(right, c.rect.right);
-                bottom = Math.max(bottom, c.rect.bottom);
+                RectF r = mCharList.get(i).rect;
+                left = Math.min(left, r.left);
+                top = Math.min(top, r.top);
+                right = Math.max(right, r.right);
+                bottom = Math.max(bottom, r.bottom);
             }
-            
-            if (left == Float.MAX_VALUE) return null;
             return new RectF(left, top, right, bottom);
         }
-        
-        /**
-         * 获取选中的文本，并智能合并行
-         */
+
         private String getSelectedString() {
             if (mStartIndex == -1 || mEndIndex == -1 || mCharList.isEmpty()) {
                 return "";
@@ -1479,116 +1600,12 @@ public class OcrImageView extends FrameLayout {
             int start = Math.min(mStartIndex, mEndIndex);
             int end = Math.max(mStartIndex, mEndIndex);
             
-            StringBuilder sb = new StringBuilder();
-            
-            for (int i = start; i <= end; i++) {
-                if (i >= mCharList.size()) break;
-
-                OcrChar curr = mCharList.get(i);
-                
-                // 1. 处理当前字符如果是换行符的情况（同Block内的换行，或OCR识别出的换行）
-                if (curr.charText.equals("\n") || curr.charText.equals("\r") || curr.charText.equals("\r\n")) {
-                    // 如果换行符后还有内容，尝试智能连接
-                    if (i < end && i + 1 < mCharList.size()) {
-                        OcrChar next = mCharList.get(i + 1);
-                        smartJoin(sb, next);
-                    }
-                    // 跳过换行符本身，不添加到sb
-                    continue;
-                }
-                
-                sb.append(curr.charText);
-                
-                // 2. 处理跨越文本块（Block）的连接
-                if (i < end && i + 1 < mCharList.size()) {
-                    OcrChar next = mCharList.get(i + 1);
-                    
-                    // 如果跨越了文本块
-                    if (curr.blockIndex != next.blockIndex) {
-                        // 计算行高和垂直间距
-                        float currHeight = curr.rect.height();
-                        float nextHeight = next.rect.height();
-                        float avgHeight = (currHeight + nextHeight) / 2;
-                        
-                        // 垂直间距：下一行顶部 - 当前行底部
-                        float verticalGap = next.rect.top - curr.rect.bottom;
-                        
-                        // 判断是否为同一段落的软换行
-                        // 条件：间距不过大 (Gap < avgHeight * 1.5)
-                        boolean isSoftWrap = verticalGap < avgHeight * 1.5; 
-                        
-                        if (isSoftWrap) {
-                            smartJoin(sb, next);
-                        } else {
-                            // 硬换行，保留换行符
-                            sb.append("\n");
-                        }
-                    }
-                }
+            List<OcrChar> selectedChars = new ArrayList<>();
+            for (int i = start; i <= end && i < mCharList.size(); i++) {
+                selectedChars.add(mCharList.get(i));
             }
             
-            return sb.toString();
-        }
-
-        /**
-         * 智能连接逻辑：处理连字符、CJK字符和空格
-         */
-        private void smartJoin(StringBuilder sb, OcrChar next) {
-            if (sb.length() == 0) return;
-            
-            char prevChar = sb.charAt(sb.length() - 1);
-            String nextStr = next.charText;
-            if (nextStr == null || nextStr.isEmpty()) return;
-            
-            // 1. 处理连字符 (Hyphenation)
-            if (prevChar == '-') {
-                boolean precedeBySpace = false;
-                if (sb.length() > 1) {
-                    char prevPrev = sb.charAt(sb.length() - 2);
-                    if (Character.isWhitespace(prevPrev)) {
-                        precedeBySpace = true;
-                    }
-                }
-                
-                if (!precedeBySpace) {
-                    // 认为是单词截断，移除连字符
-                    sb.deleteCharAt(sb.length() - 1);
-                    // 移除后直接连接，不加空格
-                    return; 
-                } else {
-                    // 独立连字符，保留并加空格
-                    sb.append(" ");
-                    return;
-                }
-            }
-            
-            // 2. 处理CJK字符（中文/日文/韩文）
-            boolean prevIsCJK = isCJK(String.valueOf(prevChar));
-            boolean nextIsCJK = isCJK(nextStr);
-            
-            if (prevIsCJK && nextIsCJK) {
-                // 中文/CJK之间不加空格
-                return;
-            }
-            
-            // 3. 其他情况（英文/数字等）加空格
-            if (prevChar != ' ') {
-                sb.append(" ");
-            }
-        }
-        
-        private boolean isCJK(String s) {
-            if (s == null || s.isEmpty()) return false;
-            int cp = s.codePointAt(0);
-            Character.UnicodeBlock block = Character.UnicodeBlock.of(cp);
-            return Character.UnicodeBlock.CJK_UNIFIED_IDEOGRAPHS.equals(block)
-                    || Character.UnicodeBlock.CJK_COMPATIBILITY_IDEOGRAPHS.equals(block)
-                    || Character.UnicodeBlock.CJK_UNIFIED_IDEOGRAPHS_EXTENSION_A.equals(block)
-                    || Character.UnicodeBlock.CJK_UNIFIED_IDEOGRAPHS_EXTENSION_B.equals(block)
-                    || Character.UnicodeBlock.CJK_SYMBOLS_AND_PUNCTUATION.equals(block)
-                    || Character.UnicodeBlock.HALFWIDTH_AND_FULLWIDTH_FORMS.equals(block)
-                    || Character.UnicodeBlock.HIRAGANA.equals(block)
-                    || Character.UnicodeBlock.KATAKANA.equals(block);
+            return OcrImageView.this.getSmartText(selectedChars);
         }
         
         /**

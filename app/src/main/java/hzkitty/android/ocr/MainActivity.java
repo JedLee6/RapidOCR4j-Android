@@ -58,7 +58,6 @@ public class MainActivity extends AppCompatActivity {
     private RadioGroup rgDetModel;
     private Switch swTextVisible;
     private SeekBar sbTextOpacity;
-    private Switch swMergeText;
     private Switch swHorizontalMerge;
     private SeekBar sbMergeThreshold;
     private TextView tvMergeThreshold;
@@ -157,6 +156,26 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onStopTrackingTouch(SeekBar seekBar) {
                 // 停止拖动时不需要特殊处理
+            }
+        });
+
+        // 设置OcrImageView文本处理完成监听器
+        ivSelectedImage.setOnTextProcessedListener(new OcrImageView.OnTextProcessedListener() {
+            @Override
+            public void onTextProcessed(String text) {
+                if (lastOcrResult == null) return;
+                
+                StringBuilder resultBuilder = new StringBuilder();
+                resultBuilder.append(getString(R.string.ocr_result)).append("\n")
+                        .append(text)
+                        .append("\n\n")
+                        .append(getString(R.string.time_statistics)).append("\n")
+                        .append(getString(R.string.total_time)).append(String.format("%.2f", lastOcrResult.getElapseTime() * 1000)).append("ms\n")
+                        .append(getString(R.string.detect_time)).append(String.format("%.2f", lastOcrResult.getDetTime() * 1000)).append("ms\n")
+                        .append(getString(R.string.classify_time)).append(String.format("%.2f", lastOcrResult.getClsTime() * 1000)).append("ms\n")
+                        .append(getString(R.string.recognize_time)).append(String.format("%.2f", lastOcrResult.getRecTime() * 1000)).append("ms");
+                
+                tvOcrResult.setText(resultBuilder.toString());
             }
         });
 
@@ -273,16 +292,7 @@ public class MainActivity extends AppCompatActivity {
         recResultAdapter = new RecResultAdapter(Collections.emptyList());
         rvRecResult.setAdapter(recResultAdapter);
         
-        // 智能合并文本开关的监听器
-        swMergeText.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
-            @Override
-            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
-                // 当开关状态改变时，重新处理当前的OCR结果
-                if (lastBitmap != null && lastOcrResult != null) {
-                    updateOcrResultDisplay(lastBitmap, lastOcrResult);
-                }
-            }
-        });
+        // swMergeText listener removed
         
         // 横向框合并开关的监听器
         swHorizontalMerge.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
@@ -359,7 +369,7 @@ public class MainActivity extends AppCompatActivity {
         sbTextOpacity = findViewById(R.id.sb_text_opacity);
         // 设置默认进度为100（对应 opacity 1.0）
         sbTextOpacity.setProgress(100);
-        swMergeText = findViewById(R.id.sw_merge_text);
+        // swMergeText = findViewById(R.id.sw_merge_text); // Removed
         swHorizontalMerge = findViewById(R.id.sw_horizontal_merge);
         sbMergeThreshold = findViewById(R.id.sb_merge_threshold);
         tvMergeThreshold = findViewById(R.id.tv_merge_threshold);
@@ -613,58 +623,19 @@ public class MainActivity extends AppCompatActivity {
         }
     }
     
-    // 智能合并文本的方法
-    private String mergeTextSmartly(String originalText) {
-        if (originalText == null || originalText.isEmpty()) {
-            return originalText;
-        }
-        
-        // 按行分割文本
-        String[] lines = originalText.split("\\n");
-        if (lines.length <= 1) {
-            return originalText;
-        }
-        
-        StringBuilder mergedText = new StringBuilder();
-        
-        // 定义分隔符号集合
-        String[] separators = {"。", "！", "？", "；", ".", "!", "?", ";", "：", ":"};
-        
-        for (int i = 0; i < lines.length; i++) {
-            String currentLine = lines[i].trim();
-            if (currentLine.isEmpty()) {
-                continue;
-            }
-            
-            mergedText.append(currentLine);
-            
-            // 检查当前行是否以分隔符号结尾
-            boolean endsWithSeparator = false;
-            for (String separator : separators) {
-                if (currentLine.endsWith(separator)) {
-                    endsWithSeparator = true;
-                    break;
-                }
-            }
-            
-            // 如果不是最后一行且当前行不以分隔符号结尾，则合并下一行（用空格连接）
-            if (i < lines.length - 1 && !endsWithSeparator) {
-                mergedText.append(" ");
-            } else {
-                mergedText.append("\n");
-            }
-        }
-        
-        return mergedText.toString().trim();
-    }
+    // 智能合并文本的方法 (Removed)
     
     // 更新OCR结果显示
     private void updateOcrResultDisplay(Bitmap bitmap, OcrResult ocrResult) {
         if (ocrResult == null) return;
         
+        // 保存当前的识别结果，用于开关切换时重新处理
+        lastBitmap = bitmap;
+        lastOcrResult = ocrResult;
+        
         // 构建包含耗时信息的识别结果
-        StringBuilder resultBuilder = new StringBuilder();
-        String ocrText = ocrResult.getStrRes();
+        // StringBuilder resultBuilder = new StringBuilder(); // Moved to listener
+        // String ocrText = ocrResult.getStrRes(); // Moved to listener
         List<RecResult> recResults = ocrResult.getRecRes();
         
         // 重置所有框的isFinalBox为false
@@ -686,8 +657,8 @@ public class MainActivity extends AppCompatActivity {
                 mergedResults = mergeVerticalBoxes(mergedResults);
             }
             
-            // 重新构建识别文本
-            ocrText = buildMergedText(mergedResults);
+            // 重新构建识别文本 (Not needed for display anymore, handled by OcrImageView)
+            // ocrText = buildMergedText(mergedResults);
             // 更新识别结果详细信息
             recResultAdapter.updateData(mergedResults);
             // 将合并后的结果传递给OcrImageView
@@ -696,14 +667,10 @@ public class MainActivity extends AppCompatActivity {
             // 如果纵向框合并开关开启且未执行横向合并，直接执行纵向合并
             if (swVerticalMerge.isChecked() && recResults != null && !recResults.isEmpty()) {
                 List<RecResult> mergedResults = mergeVerticalBoxes(recResults);
-                ocrText = buildMergedText(mergedResults);
+                // ocrText = buildMergedText(mergedResults);
                 recResultAdapter.updateData(mergedResults);
                 ivSelectedImage.setOcrResults(mergedResults);
             } else {
-                // 根据开关状态决定是否智能合并文本
-                if (swMergeText.isChecked()) {
-                    ocrText = mergeTextSmartly(ocrText);
-                }
                 // 更新识别结果详细信息
                 if (recResults != null && !recResults.isEmpty()) {
                     recResultAdapter.updateData(recResults);
@@ -713,17 +680,11 @@ public class MainActivity extends AppCompatActivity {
             }
         }
         
-        resultBuilder.append(getString(R.string.ocr_result)).append("\n")
-                .append(ocrText)
-                .append("\n\n")
-                .append(getString(R.string.time_statistics)).append("\n")
-                .append(getString(R.string.total_time)).append(String.format("%.2f", ocrResult.getElapseTime() * 1000)).append("ms\n")
-                .append(getString(R.string.detect_time)).append(String.format("%.2f", ocrResult.getDetTime() * 1000)).append("ms\n")
-                .append(getString(R.string.classify_time)).append(String.format("%.2f", ocrResult.getClsTime() * 1000)).append("ms\n")
-                .append(getString(R.string.recognize_time)).append(String.format("%.2f", ocrResult.getRecTime() * 1000)).append("ms");
-        
-        // 在文本区域显示识别结果和耗时信息
-        tvOcrResult.setText(resultBuilder.toString());
+        // 在文本区域显示识别结果和耗时信息 - Moved to OnTextProcessedListener
+        // But we need to show something initially or "Processing..."?
+        // Actually, since layout happens fast, we can just wait.
+        // Or show a placeholder.
+        tvOcrResult.setText("Processing text layout...");
         
         // 更新识别结果详细信息的可见性
         if (recResults != null && !recResults.isEmpty()) {
